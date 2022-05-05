@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2022 Felix Fietkau <nbd@nbd.name>
+ */
+#ifndef __UNETD_NETWORK_H
+#define __UNETD_NETWORK_H
+
+#include <netinet/in.h>
+#include <libubox/uloop.h>
+#include "curve25519.h"
+
+enum network_type {
+	NETWORK_TYPE_FILE,
+	NETWORK_TYPE_INLINE,
+};
+
+struct wg_ops;
+struct network_group;
+struct network_host;
+
+struct network {
+	struct avl_node node;
+
+	struct wg wg;
+
+	struct {
+		struct blob_attr *data;
+		enum network_type type;
+		int keepalive;
+		uint8_t key[CURVE25519_KEY_SIZE];
+		uint8_t pubkey[CURVE25519_KEY_SIZE];
+		const char *file;
+		const char *interface;
+		const char *update_cmd;
+		const char *domain;
+		struct blob_attr *net_data;
+	} config;
+
+	struct {
+		union network_addr addr;
+		struct network_host *local_host;
+		unsigned int keepalive;
+		int port;
+		int pex_port;
+		bool local_host_changed;
+	} net_config;
+
+	struct network_host *prev_local_host;
+	struct avl_tree hosts;
+	struct vlist_tree peers;
+
+	struct avl_tree groups;
+	struct avl_tree services;
+
+	struct uloop_timeout connect_timer;
+
+	struct network_pex pex;
+};
+
+enum {
+	NETWORK_ATTR_NAME,
+	NETWORK_ATTR_TYPE,
+	NETWORK_ATTR_KEY,
+	NETWORK_ATTR_FILE,
+	NETWORK_ATTR_DATA,
+	NETWORK_ATTR_INTERFACE,
+	NETWORK_ATTR_UPDATE_CMD,
+	NETWORK_ATTR_KEEPALIVE,
+	NETWORK_ATTR_DOMAIN,
+	__NETWORK_ATTR_MAX,
+};
+
+extern struct avl_tree networks;
+extern const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX];
+
+static inline const char *network_name(struct network *net)
+{
+	return net->node.key;
+}
+
+void network_fill_host_addr(union network_addr *addr, uint8_t *key);
+void network_free_all(void);
+
+int unetd_network_add(const char *name, struct blob_attr *config);
+int unetd_network_remove(const char *name);
+
+#endif
