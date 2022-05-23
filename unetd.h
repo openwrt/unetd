@@ -17,6 +17,7 @@
 #include "network.h"
 #include "host.h"
 #include "service.h"
+#include "ubus.h"
 
 extern bool dummy_mode;
 extern bool debug;
@@ -34,8 +35,5 @@ extern bool debug;
 
 
 void unetd_write_hosts(void);
-void unetd_ubus_init(void);
-void unetd_ubus_netifd_update(struct blob_attr *data);
-void unetd_ubus_netifd_add_route(struct network *net, union network_endpoint *ep);
 
 #endif
