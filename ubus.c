@@ -67,7 +67,7 @@ ubus_service_get_network_members(struct blob_buf *b, struct network *n,
 	struct network_service *s;
 	int i;
 
-	s = avl_find_element(&n->services, name, s, node);
+	s = vlist_find(&n->services, name, s, node);
 	if (!s)
 		return;
 

@@ -7,26 +7,20 @@
 
 enum {
 	SERVICE_ATTR_TYPE,
+	SERVICE_ATTR_CONFIG,
 	SERVICE_ATTR_MEMBERS,
 	__SERVICE_ATTR_MAX
 };
 
 static const struct blobmsg_policy service_policy[__SERVICE_ATTR_MAX] = {
 	[SERVICE_ATTR_TYPE] = { "type", BLOBMSG_TYPE_STRING },
+	[SERVICE_ATTR_CONFIG] = { "config", BLOBMSG_TYPE_TABLE },
 	[SERVICE_ATTR_MEMBERS] = { "members", BLOBMSG_TYPE_ARRAY },
 };
 
-void network_services_init(struct network *net)
-{
-	avl_init(&net->services, avl_strcmp, false, NULL);
-}
-
 void network_services_free(struct network *net)
 {
-	struct network_service *s, *tmp;
-
-	avl_remove_all_elements(&net->services, s, node, tmp)
-		free(s);
+	vlist_flush_all(&net->services);
 }
 
 static int
@@ -81,10 +75,11 @@ service_add(struct network *net, struct blob_attr *data)
 {
 	struct network_service *s;
 	struct blob_attr *tb[__SERVICE_ATTR_MAX];
-	struct blob_attr *cur;
+	struct blob_attr *cur, *config;
 	const char *name = blobmsg_name(data);
 	const char *type = NULL;
 	char *name_buf, *type_buf;
+	void *config_buf;
 	int n_members;
 
 	blobmsg_parse(service_policy, __SERVICE_ATTR_MAX, tb,
@@ -96,17 +91,22 @@ service_add(struct network *net, struct blob_attr *data)
 	if (blobmsg_check_array(tb[SERVICE_ATTR_MEMBERS], BLOBMSG_TYPE_STRING) < 0)
 		return;
 
+	config = tb[SERVICE_ATTR_CONFIG];
+
 	n_members = service_parse_members(net, NULL, tb[SERVICE_ATTR_MEMBERS]);
 	s = calloc_a(sizeof(*s) + n_members * sizeof(s->members[0]),
 		     &name_buf, strlen(name) + 1,
-		     &type_buf, type ? strlen(type) + 1 : 0);
+		     &type_buf, type ? strlen(type) + 1 : 0,
+		     &config_buf, config ? blob_pad_len(config) : 0);
 
-	s->node.key = strcpy(name_buf, name);
+	strcpy(name_buf, name);
 	if (type)
 		s->type = strcpy(type_buf, type);
+	if (config)
+		s->config = memcpy(config_buf, config, blob_pad_len(config));
 
 	service_parse_members(net, s, tb[SERVICE_ATTR_MEMBERS]);
-	avl_insert(&net->services, &s->node);
+	vlist_add(&net->services, &s->node, name_buf);
 }
 
 void network_services_add(struct network *net, struct blob_attr *data)
@@ -116,4 +116,20 @@ void network_services_add(struct network *net, struct blob_attr *data)
 
 	blobmsg_for_each_attr(cur, data, rem)
 		service_add(net, cur);
+}
+
+static void
+service_update(struct vlist_tree *tree, struct vlist_node *node_new,
+	       struct vlist_node *node_old)
+{
+	struct network_service *s_old;
+
+	s_old = container_of_safe(node_old, struct network_service, node);
+	if (s_old)
+		free(s_old);
+}
+
+void network_services_init(struct network *net)
+{
+	vlist_init(&net->services, avl_strcmp, service_update);
 }

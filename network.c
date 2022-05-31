@@ -296,6 +296,7 @@ static int network_reload(struct network *net)
 	network_pex_close(net);
 	network_services_free(net);
 	network_hosts_update_start(net);
+	network_services_update_start(net);
 
 	switch (net->config.type) {
 	case NETWORK_TYPE_FILE:
@@ -306,6 +307,7 @@ static int network_reload(struct network *net)
 		break;
 	}
 
+	network_services_update_done(net);
 	network_hosts_update_done(net);
 	uloop_timeout_set(&net->connect_timer, 10);
 

@@ -50,7 +50,7 @@ struct network {
 	struct vlist_tree peers;
 
 	struct avl_tree groups;
-	struct avl_tree services;
+	struct vlist_tree services;
 
 	struct uloop_timeout connect_timer;
 
