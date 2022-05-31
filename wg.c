@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright (C) 2022 Felix Fietkau <nbd@nbd.name>
+ */
 #include "unetd.h"
 
 static const struct wg_ops *wg_get_ops(struct network *net)
