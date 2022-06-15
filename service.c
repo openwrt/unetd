@@ -104,6 +104,10 @@ service_add(struct network *net, struct blob_attr *data)
 		s->type = strcpy(type_buf, type);
 	if (config)
 		s->config = memcpy(config_buf, config, blob_pad_len(config));
+#ifdef linux
+	if (type && !strcmp(type, "vxlan"))
+		s->ops = &vxlan_ops;
+#endif
 
 	service_parse_members(net, s, tb[SERVICE_ATTR_MEMBERS]);
 	vlist_add(&net->services, &s->node, name_buf);
@@ -122,11 +126,37 @@ static void
 service_update(struct vlist_tree *tree, struct vlist_node *node_new,
 	       struct vlist_node *node_old)
 {
-	struct network_service *s_old;
+	struct network *net = container_of(tree, struct network, services);
+	struct network_service *s_old, *s_new;
 
+	s_new = container_of_safe(node_new, struct network_service, node);
 	s_old = container_of_safe(node_old, struct network_service, node);
-	if (s_old)
-		free(s_old);
+
+	if (s_new && s_old && s_new->ops && s_new->ops == s_old->ops) {
+		s_new->ops->init(net, s_new, s_old);
+		goto out;
+	}
+
+	if (s_new && s_new->ops)
+		s_new->ops->init(net, s_new, NULL);
+
+	if (s_old && s_old->ops)
+		s_old->ops->free(net, s_old);
+
+out:
+	free(s_old);
+}
+
+void network_services_peer_update(struct network *net, struct network_peer *peer)
+{
+	struct network_service *s;
+
+	vlist_for_each_element(&net->services, s, node) {
+		if (!s->ops || !s->ops->peer_update)
+			continue;
+
+		s->ops->peer_update(net, s, peer);
+	}
 }
 
 void network_services_init(struct network *net)

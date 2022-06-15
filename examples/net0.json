@@ -31,6 +31,8 @@
 	"services": {
 		"l2-tunnel": {
 			"type": "vxlan",
+			"config": {
+			},
 			"members": [ "master", "@ap" ]
 		},
 		"usteer": {

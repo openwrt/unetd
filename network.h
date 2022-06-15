@@ -33,6 +33,7 @@ struct network {
 		const char *interface;
 		const char *update_cmd;
 		const char *domain;
+		struct blob_attr *tunnels;
 		struct blob_attr *net_data;
 	} config;
 
@@ -45,6 +46,7 @@ struct network {
 		bool local_host_changed;
 	} net_config;
 
+	int ifindex;
 	struct network_host *prev_local_host;
 	struct avl_tree hosts;
 	struct vlist_tree peers;
@@ -67,6 +69,7 @@ enum {
 	NETWORK_ATTR_UPDATE_CMD,
 	NETWORK_ATTR_KEEPALIVE,
 	NETWORK_ATTR_DOMAIN,
+	NETWORK_ATTR_TUNNELS,
 	__NETWORK_ATTR_MAX,
 };
 

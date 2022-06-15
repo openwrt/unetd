@@ -55,4 +55,31 @@ int network_get_subnet(int af, union network_addr *addr, int *mask,
 		       const char *str);
 int network_get_local_addr(void *local, const union network_endpoint *target);
 
+#define DIV_ROUND_UP(n, d)	(((n) + (d) - 1) / (d))
+
+#define bitmask_size(len)	(4 * DIV_ROUND_UP(len, 32))
+
+static inline bool bitmask_test(uint32_t *mask, unsigned int i)
+{
+	return mask[i / 32] & (1 << (i % 32));
+}
+
+static inline void bitmask_set(uint32_t *mask, unsigned int i)
+{
+	mask[i / 32] |= 1 << (i % 32);
+}
+
+static inline void bitmask_clear(uint32_t *mask, unsigned int i)
+{
+	mask[i / 32] &= ~(1 << (i % 32));
+}
+
+static inline void bitmask_set_val(uint32_t *mask, unsigned int i, bool val)
+{
+	if (val)
+		bitmask_set(mask, i);
+	else
+		bitmask_clear(mask, i);
+}
+
 #endif

@@ -3,7 +3,10 @@
  * Copyright (C) 2022 Felix Fietkau <nbd@nbd.name>
  */
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
+#include <net/if.h>
 #include <libubox/avl-cmp.h>
 #include <libubox/utils.h>
 #include <libubox/blobmsg_json.h>
@@ -48,6 +51,7 @@ const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 	[NETWORK_ATTR_KEEPALIVE] = { "keepalive", BLOBMSG_TYPE_INT32 },
 	[NETWORK_ATTR_DOMAIN] = { "domain", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_UPDATE_CMD] = { "update-cmd", BLOBMSG_TYPE_STRING },
+	[NETWORK_ATTR_TUNNELS] = { "tunnels", BLOBMSG_TYPE_TABLE },
 };
 
 AVL_TREE(networks, avl_strcmp, false, NULL);
@@ -327,6 +331,12 @@ static int network_setup(struct network *net)
 		return -1;
 	}
 
+	net->ifindex = if_nametoindex(network_name(net));
+	if (!net->ifindex) {
+		fprintf(stderr, "Could not get ifindex for network %s\n", network_name(net));
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -404,6 +414,9 @@ network_set_config(struct network *net, struct blob_attr *config)
 
 	if ((cur = tb[NETWORK_ATTR_DOMAIN]) != NULL)
 		net->config.domain = blobmsg_get_string(cur);
+
+	if ((cur = tb[NETWORK_ATTR_TUNNELS]) != NULL)
+		net->config.tunnels = cur;
 
 	if ((cur = tb[NETWORK_ATTR_KEY]) == NULL)
 		goto invalid;

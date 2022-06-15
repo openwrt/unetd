@@ -32,6 +32,7 @@ extern bool debug;
 #define D_NET(net, format, ...)	D("network %s " format, network_name(net), ##__VA_ARGS__)
 #define D_HOST(net, host, format, ...) D_NET(net, "host %s " format, network_host_name(host), ##__VA_ARGS__)
 #define D_PEER(net, peer, format, ...) D_NET(net, "host %s " format, network_peer_name(peer), ##__VA_ARGS__)
+#define D_SERVICE(net, service, format, ...) D_NET(net, "service %s " format, network_service_name(service), ##__VA_ARGS__)
 
 
 void unetd_write_hosts(void);
