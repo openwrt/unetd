@@ -24,6 +24,31 @@ void network_services_free(struct network *net)
 }
 
 static int
+__service_add_member(struct network_host **list, int *n, struct network_host *member)
+{
+	int i;
+
+	for (i = 0; i < *n; i++) {
+		if (list[i] == member)
+			return 0;
+	}
+
+	list[(*n)++] = member;
+	return 1;
+}
+
+static int
+__service_add_group(struct network_host **list, int *n, struct network_group *group)
+{
+	int i, count = 0;
+
+	for (i = 0; i < group->n_members; i++)
+		count += __service_add_member(list, n, group->members[i]);
+
+	return count;
+}
+
+static int
 __service_parse_members(struct network *net, struct network_service *s,
 			const char *name)
 {
@@ -37,7 +62,7 @@ __service_parse_members(struct network *net, struct network_service *s,
 			return 0;
 
 		if (s)
-			s->members[s->n_members++] = host;
+			__service_add_member(s->members, &s->n_members, host);
 
 		return 1;
 	}
@@ -47,13 +72,10 @@ __service_parse_members(struct network *net, struct network_service *s,
 	if (!group)
 		return 0;
 
-	if (s) {
-		memcpy(&s->members[s->n_members], group->members,
-		       group->n_members * sizeof(group->members[0]));
-		s->n_members += group->n_members;
-	}
-
-	return group->n_members;
+	if (s)
+		return __service_add_group(s->members, &s->n_members, group);
+	else
+		return group->n_members;
 }
 
 static int
