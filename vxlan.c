@@ -207,10 +207,12 @@ vxlan_tunnel_init(struct vxlan_tunnel *vt)
 	struct network_peer *local = &vt->net->net_config.local_host->peer;
 	struct nlattr *linkinfo, *data;
 	struct nl_msg *msg;
+	struct in6_addr group_addr;
 
 	if (vxlan_rtnl_init())
 		return;
 
+	memset(&group_addr, 0xff, sizeof(group_addr));
 	msg = vxlan_rtnl_msg(vt->ifname, RTM_NEWLINK, NLM_F_CREATE | NLM_F_EXCL);
 
 	linkinfo = nla_nest_start(msg, IFLA_LINKINFO);
@@ -220,8 +222,10 @@ vxlan_tunnel_init(struct vxlan_tunnel *vt)
 	data = nla_nest_start(msg, IFLA_INFO_DATA);
 	nla_put_u32(msg, IFLA_VXLAN_ID, vxlan_tunnel_id(vt));
 	nla_put(msg, IFLA_VXLAN_LOCAL6, sizeof(struct in6_addr), &local->local_addr);
+	nla_put(msg, IFLA_VXLAN_GROUP6, sizeof(struct in6_addr), &group_addr);
 	nla_put_u16(msg, IFLA_VXLAN_PORT, vt->port);
 	nla_put_u8(msg, IFLA_VXLAN_LEARNING, 1);
+	nla_put_u32(msg, IFLA_VXLAN_LINK, vt->net->ifindex);
 	nla_nest_end(msg, data);
 
 	nla_nest_end(msg, linkinfo);
