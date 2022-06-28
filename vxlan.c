@@ -223,7 +223,7 @@ vxlan_tunnel_init(struct vxlan_tunnel *vt)
 	nla_put_u32(msg, IFLA_VXLAN_ID, vxlan_tunnel_id(vt));
 	nla_put(msg, IFLA_VXLAN_LOCAL6, sizeof(struct in6_addr), &local->local_addr);
 	nla_put(msg, IFLA_VXLAN_GROUP6, sizeof(struct in6_addr), &group_addr);
-	nla_put_u16(msg, IFLA_VXLAN_PORT, vt->port);
+	nla_put_u16(msg, IFLA_VXLAN_PORT, htons(vt->port));
 	nla_put_u8(msg, IFLA_VXLAN_LEARNING, 1);
 	nla_put_u32(msg, IFLA_VXLAN_LINK, vt->net->ifindex);
 	nla_nest_end(msg, data);
