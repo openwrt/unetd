@@ -5,7 +5,6 @@ PROJECT(unetd C)
 
 SET(SOURCES
 	main.c network.c host.c service.c pex.c utils.c
-	curve25519.c siphash.c
 	wg.c wg-dummy.c wg-user.c
 )
 
@@ -31,10 +30,13 @@ ELSE()
   SET(ubus "")
 ENDIF()
 
-ADD_EXECUTABLE(unetd ${SOURCES})
-TARGET_LINK_LIBRARIES(unetd ubox ${ubus} blobmsg_json ${libjson} ${nl} ${bpf})
+ADD_LIBRARY(unet SHARED curve25519.c siphash.c)
+TARGET_LINK_LIBRARIES(unet ubox)
 
-INSTALL(TARGETS unetd
+ADD_EXECUTABLE(unetd ${SOURCES})
+TARGET_LINK_LIBRARIES(unetd unet ubox ${ubus} blobmsg_json ${libjson} ${nl} ${bpf})
+
+INSTALL(TARGETS unetd unet
 	RUNTIME DESTINATION sbin
 	LIBRARY DESTINATION lib
 )
