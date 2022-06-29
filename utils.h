@@ -7,6 +7,8 @@
 
 #include <netinet/in.h>
 
+struct nl_msg;
+
 union network_addr {
 	struct {
 		uint8_t network_id[8];
@@ -81,5 +83,8 @@ static inline void bitmask_set_val(uint32_t *mask, unsigned int i, bool val)
 	else
 		bitmask_clear(mask, i);
 }
+
+int rtnl_init(void);
+int rtnl_call(struct nl_msg *msg);
 
 #endif

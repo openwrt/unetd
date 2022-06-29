@@ -16,6 +16,7 @@ struct cmdline_network {
 
 static struct cmdline_network *cmd_nets;
 static const char *hosts_file;
+const char *mssfix_path = UNETD_MSS_BPF_PATH;
 bool dummy_mode;
 bool debug;
 
@@ -97,7 +98,7 @@ int main(int argc, char **argv)
 	struct cmdline_network *net;
 	int ch;
 
-	while ((ch = getopt(argc, argv, "Ddh:N:")) != -1) {
+	while ((ch = getopt(argc, argv, "Ddh:M:N:")) != -1) {
 		switch (ch) {
 		case 'd':
 			debug = true;
@@ -113,6 +114,9 @@ int main(int argc, char **argv)
 			net->next = cmd_nets;
 			net->data = optarg;
 			cmd_nets = net;
+			break;
+		case 'M':
+			mssfix_path = optarg;
 			break;
 		}
 	}

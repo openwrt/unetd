@@ -11,6 +11,8 @@
 #include <netinet/if_ether.h>
 #include <net/if.h>
 #include <linux/rtnetlink.h>
+#include <linux/ipv6.h>
+#include <linux/udp.h>
 #include "unetd.h"
 
 struct vxlan_tunnel {
@@ -26,39 +28,19 @@ struct vxlan_tunnel {
 	bool active;
 };
 
-static struct nl_sock *rtnl;
-static bool ignore_errors;
-
-static int
-unetd_nl_error_cb(struct sockaddr_nl *nla, struct nlmsgerr *err,
-		   void *arg)
+static uint32_t
+vxlan_tunnel_id(struct vxlan_tunnel *vt)
 {
-	struct nlmsghdr *nlh = (struct nlmsghdr *) err - 1;
-	struct nlattr *tb[NLMSGERR_ATTR_MAX + 1];
-	struct nlattr *attrs;
-	int ack_len = sizeof(*nlh) + sizeof(int) + sizeof(*nlh);
-	int len = nlh->nlmsg_len;
-	const char *errstr = "(unknown)";
+	siphash_key_t key = {};
+	const char *name = network_service_name(vt->s);
+	uint64_t val;
 
-	if (ignore_errors)
-		return NL_STOP;
+	if (vt->vni != ~0)
+		return vt->vni;
 
-	if (!(nlh->nlmsg_flags & NLM_F_ACK_TLVS))
-		return NL_STOP;
+	siphash_to_le64(&val, name, strlen(name), &key);
 
-	if (!(nlh->nlmsg_flags & NLM_F_CAPPED))
-		ack_len += err->msg.nlmsg_len - sizeof(*nlh);
-
-	attrs = (void *) ((unsigned char *) nlh + ack_len);
-	len -= ack_len;
-
-	nla_parse(tb, NLMSGERR_ATTR_MAX, attrs, len, NULL);
-	if (tb[NLMSGERR_ATTR_MSG])
-		errstr = nla_data(tb[NLMSGERR_ATTR_MSG]);
-
-	D("Netlink error(%d): %s\n", err->error, errstr);
-
-	return NL_STOP;
+	return val & 0x00ffffff;
 }
 
 static struct nl_msg *vxlan_rtnl_msg(const char *ifname, int type, int flags)
@@ -76,69 +58,6 @@ static struct nl_msg *vxlan_rtnl_msg(const char *ifname, int type, int flags)
 	nla_put_string(msg, IFLA_IFNAME, ifname);
 
 	return msg;
-}
-
-static int vxlan_rtnl_call(struct nl_msg *msg)
-{
-	int ret;
-
-	ret = nl_send_auto_complete(rtnl, msg);
-	nlmsg_free(msg);
-
-	if (ret < 0)
-		return ret;
-
-	return nl_wait_for_ack(rtnl);
-}
-
-static int
-vxlan_rtnl_init(void)
-{
-	int fd, opt;
-
-	if (rtnl)
-		return 0;
-
-	rtnl = nl_socket_alloc();
-	if (!rtnl)
-		return -1;
-
-	if (nl_connect(rtnl, NETLINK_ROUTE))
-		goto free;
-
-	nl_socket_disable_seq_check(rtnl);
-	nl_socket_set_buffer_size(rtnl, 65536, 0);
-	nl_cb_err(nl_socket_get_cb(rtnl), NL_CB_CUSTOM, unetd_nl_error_cb, NULL);
-
-	fd = nl_socket_get_fd(rtnl);
-
-	opt = 1;
-	setsockopt(fd, SOL_NETLINK, NETLINK_EXT_ACK, &opt, sizeof(opt));
-
-	opt = 1;
-	setsockopt(fd, SOL_NETLINK, NETLINK_CAP_ACK, &opt, sizeof(opt));
-
-	return 0;
-
-free:
-	nl_socket_free(rtnl);
-	rtnl = NULL;
-	return -1;
-}
-
-static uint32_t
-vxlan_tunnel_id(struct vxlan_tunnel *vt)
-{
-	siphash_key_t key = {};
-	const char *name = network_service_name(vt->s);
-	uint64_t val;
-
-	if (vt->vni != ~0)
-		return vt->vni;
-
-	siphash_to_le64(&val, name, strlen(name), &key);
-
-	return val & 0x00ffffff;
 }
 
 static int
@@ -163,7 +82,7 @@ vxlan_update_host_fdb_entry(struct vxlan_tunnel *vt, struct network_host *host, 
 	nla_put(msg, NDA_DST, sizeof(struct in6_addr), &host->peer.local_addr);
 	nla_put_u32(msg, NDA_IFINDEX, vt->net->ifindex);
 
-	return vxlan_rtnl_call(msg);
+	return rtnl_call(msg);
 }
 
 static void
@@ -208,8 +127,9 @@ vxlan_tunnel_init(struct vxlan_tunnel *vt)
 	struct nlattr *linkinfo, *data;
 	struct nl_msg *msg;
 	struct in6_addr group_addr;
+	int mtu;
 
-	if (vxlan_rtnl_init())
+	if (rtnl_init())
 		return;
 
 	memset(&group_addr, 0xff, sizeof(group_addr));
@@ -230,7 +150,7 @@ vxlan_tunnel_init(struct vxlan_tunnel *vt)
 
 	nla_nest_end(msg, linkinfo);
 
-	if (vxlan_rtnl_call(msg) < 0)
+	if (rtnl_call(msg) < 0)
 		return;
 
 	vt->ifindex = if_nametoindex(vt->ifname);
@@ -241,6 +161,9 @@ vxlan_tunnel_init(struct vxlan_tunnel *vt)
 
 	vt->active = true;
 	vxlan_update_fdb_hosts(vt);
+
+	mtu = 1420 - sizeof(struct ipv6hdr) - sizeof(struct udphdr) - 8;
+	unetd_attach_mssfix(vt->ifindex, mtu);
 }
 
 static void
@@ -248,12 +171,9 @@ vxlan_tunnel_teardown(struct vxlan_tunnel *vt)
 {
 	struct nl_msg *msg;
 
-	if (!rtnl)
-		return;
-
 	vt->active = false;
 	msg = vxlan_rtnl_msg(vt->ifname, RTM_DELLINK, 0);
-	vxlan_rtnl_call(msg);
+	rtnl_call(msg);
 }
 
 static const char *

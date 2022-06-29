@@ -17,9 +17,11 @@ FIND_LIBRARY(libjson NAMES json-c json)
 OPTION(UBUS_SUPPORT "enable ubus support" ON)
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	FIND_LIBRARY(nl nl-tiny)
-	SET(SOURCES ${SOURCES} wg-linux.c vxlan.c)
+	find_library(bpf NAMES bpf)
+	SET(SOURCES ${SOURCES} wg-linux.c vxlan.c bpf.c rtnl.c)
 ELSE()
 	SET(nl "")
+	SET(bpf "")
 ENDIF()
 IF(UBUS_SUPPORT)
   SET(SOURCES ${SOURCES} ubus.c)
@@ -30,7 +32,7 @@ ELSE()
 ENDIF()
 
 ADD_EXECUTABLE(unetd ${SOURCES})
-TARGET_LINK_LIBRARIES(unetd ubox ${ubus} blobmsg_json ${libjson} ${nl})
+TARGET_LINK_LIBRARIES(unetd ubox ${ubus} blobmsg_json ${libjson} ${nl} ${bpf})
 
 INSTALL(TARGETS unetd
 	RUNTIME DESTINATION sbin

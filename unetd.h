@@ -19,6 +19,7 @@
 #include "service.h"
 #include "ubus.h"
 
+extern const char *mssfix_path;
 extern bool dummy_mode;
 extern bool debug;
 
@@ -34,7 +35,10 @@ extern bool debug;
 #define D_PEER(net, peer, format, ...) D_NET(net, "host %s " format, network_peer_name(peer), ##__VA_ARGS__)
 #define D_SERVICE(net, service, format, ...) D_NET(net, "service %s " format, network_service_name(service), ##__VA_ARGS__)
 
+#define UNETD_MSS_BPF_PATH	"/lib/bpf/mss.o"
+#define UNETD_MSS_PRIO_BASE	0x130
 
 void unetd_write_hosts(void);
+int unetd_attach_mssfix(int ifindex, int mtu);
 
 #endif
