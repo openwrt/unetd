@@ -97,9 +97,8 @@ int unetd_attach_mssfix(int ifindex, int mtu)
 	}
 
 	prog_fd = bpf_program__fd(prog);
-	if (unetd_attach_bpf_prog(ifindex, prog_fd, true) ||
-	    unetd_attach_bpf_prog(ifindex, prog_fd, false))
-		goto out;
+	unetd_attach_bpf_prog(ifindex, prog_fd, true);
+	unetd_attach_bpf_prog(ifindex, prog_fd, false);
 
 	ret = 0;
 
