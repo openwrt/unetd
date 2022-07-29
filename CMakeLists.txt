@@ -30,7 +30,7 @@ ELSE()
   SET(ubus "")
 ENDIF()
 
-ADD_LIBRARY(unet SHARED curve25519.c siphash.c)
+ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c)
 TARGET_LINK_LIBRARIES(unet ubox)
 
 ADD_EXECUTABLE(unetd ${SOURCES})
