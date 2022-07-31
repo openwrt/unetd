@@ -6,3 +6,4 @@ CMakeFiles
 *.so
 *.dylib
 unetd
+unet-tool

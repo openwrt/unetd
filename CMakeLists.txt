@@ -30,13 +30,16 @@ ELSE()
   SET(ubus "")
 ENDIF()
 
-ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c)
+ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c auth-data.c)
 TARGET_LINK_LIBRARIES(unet ubox)
 
 ADD_EXECUTABLE(unetd ${SOURCES})
 TARGET_LINK_LIBRARIES(unetd unet ubox ${ubus} blobmsg_json ${libjson} ${nl} ${bpf})
 
-INSTALL(TARGETS unetd unet
+ADD_EXECUTABLE(unet-tool cli.c)
+TARGET_LINK_LIBRARIES(unet-tool unet blobmsg_json ${libjson} ubox)
+
+INSTALL(TARGETS unetd unet unet-tool
 	RUNTIME DESTINATION sbin
 	LIBRARY DESTINATION lib
 )
