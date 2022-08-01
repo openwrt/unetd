@@ -44,6 +44,7 @@ static const struct blobmsg_policy netconf_policy[__NETCONF_ATTR_MAX] = {
 const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 	[NETWORK_ATTR_NAME] = { "name", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_TYPE] = { "type", BLOBMSG_TYPE_STRING },
+	[NETWORK_ATTR_AUTH_KEY] = { "auth_key", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_KEY] = { "key", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_FILE] = { "file", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_DATA] = { "data", BLOBMSG_TYPE_TABLE },
@@ -115,6 +116,50 @@ static int network_load_file(struct network *net)
 		return -1;
 
 	return network_load_data(net, b.head);
+}
+
+static int network_load_dynamic(struct network *net)
+{
+	const char *json = NULL;
+	char *fname = NULL;
+	struct stat st;
+	FILE *f = NULL;
+	int ret = -1;
+
+	asprintf(&fname, "%s/%s.bin", data_dir, network_name(net));
+	f = fopen(fname, "r");
+	free(fname);
+
+	if (!f) {
+		D_NET(net, "failed to open %s/%s.bin\n", data_dir, network_name(net));
+		return -1;
+	}
+
+	if (fstat(fileno(f), &st) < 0)
+		goto out;
+
+	net->net_data_len = st.st_size;
+	net->net_data = realloc(net->net_data, net->net_data_len + 1);
+	memset(net->net_data + net->net_data_len, 0, 1);
+	if (fread(net->net_data, 1, net->net_data_len, f) != net->net_data_len ||
+	    unet_auth_data_validate(net->config.auth_key, net->net_data,
+				    net->net_data_len, &json)) {
+		net->net_data_len = 0;
+		goto out;
+	}
+
+	fclose(f);
+	blob_buf_init(&b, 0);
+	if (!blobmsg_add_json_from_string(&b, json)) {
+		net->net_data_len = 0;
+		return -1;
+	}
+
+	return network_load_data(net, b.head);
+
+out:
+	fclose(f);
+	return ret;
 }
 
 static void
@@ -309,6 +354,9 @@ static int network_reload(struct network *net)
 	case NETWORK_TYPE_INLINE:
 		ret = network_load_data(net, net->config.net_data);
 		break;
+	case NETWORK_TYPE_DYNAMIC:
+		ret = network_load_dynamic(net);
+		break;
 	}
 
 	network_services_update_done(net);
@@ -354,6 +402,7 @@ network_destroy(struct network *net)
 {
 	network_teardown(net);
 	avl_delete(&networks, &net->node);
+	free(net->net_data);
 	free(net->config.data);
 	free(net);
 }
@@ -377,10 +426,10 @@ network_set_config(struct network *net, struct blob_attr *config)
 		      blobmsg_data(net->config.data),
 		      blobmsg_len(net->config.data));
 
-	if ((cur = tb[NETWORK_ATTR_TYPE]) == NULL)
-		goto invalid;
-
-	if (!strcmp(blobmsg_get_string(cur), "file"))
+	if ((cur = tb[NETWORK_ATTR_TYPE]) == NULL ||
+	    !strcmp(blobmsg_get_string(cur), "dynamic"))
+		net->config.type = NETWORK_TYPE_DYNAMIC;
+	else if (!strcmp(blobmsg_get_string(cur), "file"))
 		net->config.type = NETWORK_TYPE_FILE;
 	else if (!strcmp(blobmsg_get_string(cur), "inline"))
 		net->config.type = NETWORK_TYPE_INLINE;
@@ -402,6 +451,14 @@ network_set_config(struct network *net, struct blob_attr *config)
 	case NETWORK_TYPE_INLINE:
 		net->config.net_data = tb[NETWORK_ATTR_DATA];
 		if (!net->config.net_data)
+			goto invalid;
+		break;
+	case NETWORK_TYPE_DYNAMIC:
+		if ((cur = tb[NETWORK_ATTR_AUTH_KEY]) == NULL)
+			goto invalid;
+
+		if (b64_decode(blobmsg_get_string(cur), net->config.auth_key,
+			       sizeof(net->config.auth_key)) != sizeof(net->config.auth_key))
 			goto invalid;
 		break;
 	}

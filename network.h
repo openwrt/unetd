@@ -12,6 +12,7 @@
 enum network_type {
 	NETWORK_TYPE_FILE,
 	NETWORK_TYPE_INLINE,
+	NETWORK_TYPE_DYNAMIC,
 };
 
 struct wg_ops;
@@ -29,6 +30,7 @@ struct network {
 		int keepalive;
 		uint8_t key[CURVE25519_KEY_SIZE];
 		uint8_t pubkey[CURVE25519_KEY_SIZE];
+		uint8_t auth_key[CURVE25519_KEY_SIZE];
 		const char *file;
 		const char *interface;
 		const char *update_cmd;
@@ -45,6 +47,9 @@ struct network {
 		int pex_port;
 		bool local_host_changed;
 	} net_config;
+
+	void *net_data;
+	size_t net_data_len;
 
 	int ifindex;
 	struct network_host *prev_local_host;
@@ -63,6 +68,7 @@ enum {
 	NETWORK_ATTR_NAME,
 	NETWORK_ATTR_TYPE,
 	NETWORK_ATTR_KEY,
+	NETWORK_ATTR_AUTH_KEY,
 	NETWORK_ATTR_FILE,
 	NETWORK_ATTR_DATA,
 	NETWORK_ATTR_INTERFACE,

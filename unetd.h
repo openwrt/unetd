@@ -18,8 +18,10 @@
 #include "host.h"
 #include "service.h"
 #include "ubus.h"
+#include "auth-data.h"
 
 extern const char *mssfix_path;
+extern const char *data_dir;
 extern bool debug;
 
 #define D(format, ...)								\
@@ -34,6 +36,7 @@ extern bool debug;
 #define D_PEER(net, peer, format, ...) D_NET(net, "host %s " format, network_peer_name(peer), ##__VA_ARGS__)
 #define D_SERVICE(net, service, format, ...) D_NET(net, "service %s " format, network_service_name(service), ##__VA_ARGS__)
 
+#define UNETD_DATA_DIR "/etc/unetd"
 #define UNETD_MSS_BPF_PATH	"/lib/bpf/mss.o"
 #define UNETD_MSS_PRIO_BASE	0x130
 
