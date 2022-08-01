@@ -6,9 +6,6 @@
 
 static const struct wg_ops *wg_get_ops(struct network *net)
 {
-	if (dummy_mode)
-		return &wg_dummy_ops;
-
 	if (wg_user_ops.check(net))
 		return &wg_user_ops;
 

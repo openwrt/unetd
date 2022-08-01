@@ -5,7 +5,7 @@ PROJECT(unetd C)
 
 SET(SOURCES
 	main.c network.c host.c service.c pex.c utils.c
-	wg.c wg-dummy.c wg-user.c
+	wg.c wg-user.c
 )
 
 SET(RUNSTATEDIR /var/run)

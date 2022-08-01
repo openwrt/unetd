@@ -20,7 +20,6 @@
 #include "ubus.h"
 
 extern const char *mssfix_path;
-extern bool dummy_mode;
 extern bool debug;
 
 #define D(format, ...)								\

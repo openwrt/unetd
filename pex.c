@@ -469,7 +469,7 @@ int network_pex_open(struct network *net)
 	int yes = 1;
 	int fd;
 
-	if (dummy_mode || !local || !net->net_config.pex_port)
+	if (!local || !net->net_config.pex_port)
 		return 0;
 
 	fd = socket(PF_INET6, SOCK_DGRAM, IPPROTO_UDP);

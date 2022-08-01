@@ -37,7 +37,6 @@ struct wg {
 	const struct wg_ops *ops;
 };
 
-extern const struct wg_ops wg_dummy_ops;
 extern const struct wg_ops wg_user_ops;
 extern const struct wg_ops wg_linux_ops;
 
