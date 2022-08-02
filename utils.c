@@ -68,7 +68,7 @@ found:
 	ret = 0;
 
 free_ai:
-	freeaddrinfo(ai_cur);
+	freeaddrinfo(ai);
 
 out:
 	free(buf);
