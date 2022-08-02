@@ -81,7 +81,6 @@ SEC("tc")
 int mssfix(struct __sk_buff *skb)
 {
 	struct skb_parser_info info;
-	u32 offset_eth;
 	__u16 mss;
 	int type;
 
@@ -92,7 +91,6 @@ int mssfix(struct __sk_buff *skb)
 	skb_parse_vlan(&info);
 	skb_parse_vlan(&info);
 
-	offset_eth = info.offset;
 	if (!skb_parse_ipv4(&info, 60) && !skb_parse_ipv6(&info, 60))
 		return TC_ACT_UNSPEC;
 
