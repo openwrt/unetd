@@ -27,7 +27,7 @@ int network_get_endpoint(union network_endpoint *dest, const char *str,
 		host++;
 		port = strchr(host, ']');
 		if (!port)
-			return -1;
+			goto out;
 
 		*(port++) = 0;
 		if (!*port)
@@ -60,12 +60,15 @@ int network_get_endpoint(union network_endpoint *dest, const char *str,
 
 found:
 	if (ai_cur->ai_addrlen > sizeof(*dest))
-		goto out;
+		goto free_ai;
 
 	memcpy(dest, ai_cur->ai_addr, ai_cur->ai_addrlen);
 	if (!port)
 		dest->in.sin_port = htons(default_port);
 	ret = 0;
+
+free_ai:
+	freeaddrinfo(ai_cur);
 
 out:
 	free(buf);
