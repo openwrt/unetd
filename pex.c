@@ -76,13 +76,12 @@ pex_msg_peer(struct network *net, const uint8_t *id)
 
 static struct pex_hdr *pex_msg_init(struct network *net, uint8_t opcode)
 {
-	struct network_peer *local = &net->net_config.local_host->peer;
 	struct pex_hdr *hdr = (struct pex_hdr *)tx_buf;
 
 	hdr->version = 0;
 	hdr->opcode = opcode;
 	hdr->len = 0;
-	memcpy(hdr->id, local->key, sizeof(hdr->id));
+	memcpy(hdr->id, net->config.pubkey, sizeof(hdr->id));
 
 	return hdr;
 }
