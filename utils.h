@@ -5,7 +5,9 @@
 #ifndef __UNETD_UTILS_H
 #define __UNETD_UTILS_H
 
+#include <string.h>
 #include <netinet/in.h>
+#include <libubox/utils.h>
 
 struct nl_msg;
 
@@ -82,6 +84,38 @@ static inline void bitmask_set_val(uint32_t *mask, unsigned int i, bool val)
 		bitmask_set(mask, i);
 	else
 		bitmask_clear(mask, i);
+}
+
+static inline uint16_t get_unaligned_be16(const uint8_t *p)
+{
+	return p[1] | p[0] << 8;
+}
+
+static inline uint32_t get_unaligned_be32(const uint8_t *p)
+{
+	return p[3] | p[2] << 8 | p[1] << 16 | p[0] << 24;
+}
+
+static inline uint64_t get_unaligned_be64(const uint8_t *p)
+{
+	return (uint64_t)get_unaligned_be32(p) << 32 |
+	       get_unaligned_be32(p + 4);
+}
+
+static inline uint16_t get_unaligned_le16(const uint8_t *p)
+{
+	return p[0] | p[1] << 8;
+}
+
+static inline uint32_t get_unaligned_le32(const uint8_t *p)
+{
+	return p[0] | p[1] << 8 | p[2] << 16 | p[3] << 24;
+}
+
+static inline uint64_t get_unaligned_le64(const uint8_t *p)
+{
+	return (uint64_t)get_unaligned_le32(p + 4) << 32 |
+	       get_unaligned_le32(p);
 }
 
 int rtnl_init(void);
