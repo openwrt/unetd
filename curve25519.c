@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "utils.h"
 
 #ifndef __BYTE_ORDER__
 #include <sys/param.h>
@@ -30,15 +31,6 @@ typedef uint32_t u32, __le32;
 typedef uint8_t u8;
 typedef int64_t s64;
 #endif
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define le64_to_cpup(a) __builtin_bswap64(*(a))
-#define le32_to_cpup(a) __builtin_bswap32(*(a))
-#define cpu_to_le64(a) __builtin_bswap64(a)
-#else
-#define le64_to_cpup(a) (*(a))
-#define le32_to_cpup(a) (*(a))
-#define cpu_to_le64(a) (a)
-#endif
 #ifndef __unused
 #define __unused  __attribute__((unused))
 #endif
@@ -55,18 +47,6 @@ typedef int64_t s64;
 #define __force
 #endif
 
-static __always_inline __unused __le32 get_unaligned_le32(const u8 *a)
-{
-	__le32 l;
-	__builtin_memcpy(&l, a, sizeof(l));
-	return le32_to_cpup(&l);
-}
-static __always_inline __unused __le64 get_unaligned_le64(const u8 *a)
-{
-	__le64 l;
-	__builtin_memcpy(&l, a, sizeof(l));
-	return le64_to_cpup(&l);
-}
 static __always_inline __unused void put_unaligned_le64(u64 s, u8 *d)
 {
 	__le64 l = cpu_to_le64(s);
