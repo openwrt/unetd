@@ -53,6 +53,7 @@ const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 	[NETWORK_ATTR_DOMAIN] = { "domain", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_UPDATE_CMD] = { "update-cmd", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_TUNNELS] = { "tunnels", BLOBMSG_TYPE_TABLE },
+	[NETWORK_ATTR_AUTH_CONNECT] = { "auth_connect", BLOBMSG_TYPE_ARRAY },
 };
 
 AVL_TREE(networks, avl_strcmp, false, NULL);
@@ -143,7 +144,7 @@ static int network_load_dynamic(struct network *net)
 	memset(net->net_data + net->net_data_len, 0, 1);
 	if (fread(net->net_data, 1, net->net_data_len, f) != net->net_data_len ||
 	    unet_auth_data_validate(net->config.auth_key, net->net_data,
-				    net->net_data_len, &json)) {
+				    net->net_data_len, &net->net_data_version, &json)) {
 		net->net_data_len = 0;
 		goto out;
 	}
@@ -161,6 +162,53 @@ out:
 	fclose(f);
 	return ret;
 }
+
+int network_save_dynamic(struct network *net)
+{
+	char *fname = NULL, *fname2;
+	size_t len;
+	FILE *f;
+	int fd, ret;
+
+	if (net->config.type != NETWORK_TYPE_DYNAMIC ||
+	    !net->net_data_len)
+		return -1;
+
+	asprintf(&fname, "%s/%s.bin.XXXXXXXX", data_dir, network_name(net));
+	fd = mkstemp(fname);
+	if (fd < 0)
+		goto error;
+
+	f = fdopen(fd, "w");
+	if (!f) {
+		close(fd);
+		goto error;
+	}
+
+	len = fwrite(net->net_data, 1, net->net_data_len, f);
+	fflush(f);
+	fdatasync(fd);
+	fclose(f);
+
+	if (len != net->net_data_len)
+		goto error;
+
+	fname2 = strdup(fname);
+	*strrchr(fname2, '.') = 0;
+	ret = rename(fname, fname2);
+	free(fname2);
+
+	if (ret)
+		unlink(fname);
+	free(fname);
+
+	return ret;
+
+error:
+	free(fname);
+	return -1;
+}
+
 
 static void
 network_fill_ip(struct blob_buf *buf, int af, union network_addr *addr, int mask)
@@ -334,9 +382,9 @@ network_do_update(struct network *net, bool up)
 	unetd_ubus_netifd_update(b.head);
 }
 
-static int network_reload(struct network *net)
+static void network_reload(struct uloop_timeout *t)
 {
-	int ret;
+	struct network *net = container_of(t, struct network, reload_timer);
 
 	net->prev_local_host = net->net_config.local_host;
 
@@ -349,13 +397,13 @@ static int network_reload(struct network *net)
 
 	switch (net->config.type) {
 	case NETWORK_TYPE_FILE:
-		ret = network_load_file(net);
+		network_load_file(net);
 		break;
 	case NETWORK_TYPE_INLINE:
-		ret = network_load_data(net, net->config.net_data);
+		network_load_data(net, net->config.net_data);
 		break;
 	case NETWORK_TYPE_DYNAMIC:
-		ret = network_load_dynamic(net);
+		network_load_dynamic(net);
 		break;
 	}
 
@@ -368,8 +416,6 @@ static int network_reload(struct network *net)
 	unetd_write_hosts();
 	network_do_update(net, true);
 	network_pex_open(net);
-
-	return ret;
 }
 
 static int network_setup(struct network *net)
@@ -390,6 +436,7 @@ static int network_setup(struct network *net)
 
 static void network_teardown(struct network *net)
 {
+	uloop_timeout_cancel(&net->reload_timer);
 	network_do_update(net, false);
 	network_pex_close(net);
 	network_hosts_free(net);
@@ -475,6 +522,10 @@ network_set_config(struct network *net, struct blob_attr *config)
 	if ((cur = tb[NETWORK_ATTR_TUNNELS]) != NULL)
 		net->config.tunnels = cur;
 
+	if ((cur = tb[NETWORK_ATTR_AUTH_CONNECT]) != NULL &&
+	    blobmsg_check_array(cur, BLOBMSG_TYPE_STRING) > 0)
+		net->config.auth_connect = cur;
+
 	if ((cur = tb[NETWORK_ATTR_KEY]) == NULL)
 		goto invalid;
 
@@ -488,7 +539,7 @@ network_set_config(struct network *net, struct blob_attr *config)
 		goto invalid;
 
 reload:
-	network_reload(net);
+	network_reload(&net->reload_timer);
 
 	return 0;
 
@@ -505,6 +556,7 @@ network_alloc(const char *name)
 
 	net = calloc_a(sizeof(*net), &name_buf, strlen(name) + 1);
 	net->node.key = strcpy(name_buf, name);
+	net->reload_timer.cb = network_reload;
 	avl_insert(&networks, &net->node);
 
 	network_pex_init(net);

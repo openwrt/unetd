@@ -59,6 +59,8 @@ int network_get_subnet(int af, union network_addr *addr, int *mask,
 		       const char *str);
 int network_get_local_addr(void *local, const union network_endpoint *target);
 
+void *unet_read_file(const char *name, size_t *len);
+
 #define DIV_ROUND_UP(n, d)	(((n) + (d) - 1) / (d))
 
 #define bitmask_size(len)	(4 * DIV_ROUND_UP(len, 32))

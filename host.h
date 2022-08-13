@@ -29,6 +29,7 @@ struct network_peer {
 		uint64_t last_handshake;
 		uint64_t last_request;
 		int idle;
+		int num_net_queries;
 	} state;
 };
 

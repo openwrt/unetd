@@ -4,8 +4,10 @@
  */
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <stdio.h>
 #include "unetd.h"
 
 int network_get_endpoint(union network_endpoint *dest, const char *str,
@@ -140,4 +142,40 @@ int network_get_local_addr(void *local, const union network_endpoint *target)
 out:
 	close(fd);
 	return ret;
+}
+
+void *unet_read_file(const char *name, size_t *len)
+{
+	struct stat st;
+	void *data;
+	FILE *f;
+
+	f = fopen(name, "r");
+	if (!f)
+		goto error;
+
+	if (fstat(fileno(f), &st) < 0)
+		goto close;
+
+	if (*len && st.st_size > *len)
+		goto close;
+
+	data = malloc(st.st_size);
+	if (!data)
+		goto close;
+
+	if (fread(data, 1, st.st_size, f) != st.st_size) {
+		free(data);
+		goto close;
+	}
+	fclose(f);
+
+	*len = st.st_size;
+	return data;
+
+close:
+	fclose(f);
+error:
+	*len = 0;
+	return NULL;
 }

@@ -7,44 +7,9 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <time.h>
+#include <inttypes.h>
 #include "unetd.h"
-
-#define PEX_BUF_SIZE	1024
-
-enum pex_opcode {
-	PEX_MSG_HELLO,
-	PEX_MSG_NOTIFY_PEERS,
-	PEX_MSG_QUERY,
-	PEX_MSG_PING,
-	PEX_MSG_PONG,
-};
-
-#define PEX_ID_LEN		8
-
-struct pex_hdr {
-	uint8_t version;
-	uint8_t opcode;
-	uint16_t len;
-	uint8_t id[PEX_ID_LEN];
-};
-
-#define PEER_EP_F_IPV6		(1 << 0)
-#define PEER_EP_F_LOCAL		(1 << 1)
-
-struct pex_peer_endpoint {
-	uint16_t flags;
-	uint16_t port;
-	uint8_t peer_id[PEX_ID_LEN];
-	uint8_t addr[16];
-};
-
-struct pex_hello {
-	uint16_t flags;
-	uint8_t local_addr[16];
-};
-
-static char tx_buf[PEX_BUF_SIZE];
+#include "pex-msg.h"
 
 static const char *pex_peer_id_str(const uint8_t *key)
 {
@@ -57,6 +22,17 @@ static const char *pex_peer_id_str(const uint8_t *key)
 	return str;
 }
 
+static struct pex_hdr *
+pex_msg_init(struct network *net, uint8_t opcode)
+{
+	return __pex_msg_init(net->config.pubkey, opcode);
+}
+
+static struct pex_hdr *
+pex_msg_init_ext(struct network *net, uint8_t opcode, bool ext)
+{
+	return __pex_msg_init_ext(net->config.pubkey, net->config.auth_key, opcode, ext);
+}
 
 static struct network_peer *
 pex_msg_peer(struct network *net, const uint8_t *id)
@@ -74,52 +50,42 @@ pex_msg_peer(struct network *net, const uint8_t *id)
 	return peer;
 }
 
-static struct pex_hdr *pex_msg_init(struct network *net, uint8_t opcode)
+static void
+pex_get_peer_addr(struct sockaddr_in6 *sin6, struct network *net,
+		  struct network_peer *peer)
 {
-	struct pex_hdr *hdr = (struct pex_hdr *)tx_buf;
-
-	hdr->version = 0;
-	hdr->opcode = opcode;
-	hdr->len = 0;
-	memcpy(hdr->id, net->config.pubkey, sizeof(hdr->id));
-
-	return hdr;
-}
-
-static void *pex_msg_append(size_t len)
-{
-	struct pex_hdr *hdr = (struct pex_hdr *)tx_buf;
-	int ofs = hdr->len + sizeof(struct pex_hdr);
-	void *buf = &tx_buf[ofs];
-
-	if (sizeof(tx_buf) - ofs < len)
-		return NULL;
-
-	hdr->len += len;
-	memset(buf, 0, len);
-
-	return buf;
+	*sin6 = (struct sockaddr_in6){
+		.sin6_family = AF_INET6,
+		.sin6_addr = peer->local_addr.in6,
+		.sin6_port = htons(net->net_config.pex_port),
+	};
 }
 
 static void pex_msg_send(struct network *net, struct network_peer *peer)
 {
 	struct sockaddr_in6 sin6 = {};
-	struct pex_hdr *hdr = (struct pex_hdr *)tx_buf;
-	size_t tx_len = sizeof(*hdr) + hdr->len;
-	int ret;
 
-	if (peer == &net->net_config.local_host->peer || !peer->state.connected)
+	if (!peer || peer == &net->net_config.local_host->peer || !peer->state.connected)
 		return;
 
-	sin6.sin6_family = AF_INET6;
-	memcpy(&sin6.sin6_addr, &peer->local_addr.in6,
-	       sizeof(peer->local_addr.in6));
-	sin6.sin6_port = htons(net->net_config.pex_port);
-	hdr->len = htons(hdr->len);
-	ret = sendto(net->pex.fd.fd, tx_buf, tx_len, 0, (struct sockaddr *)&sin6, sizeof(sin6));
-	hdr->len = ntohs(hdr->len);
-	if (ret < 0)
+	pex_get_peer_addr(&sin6, net, peer);
+	if (__pex_msg_send(net->pex.fd.fd, &sin6) < 0)
 		D_PEER(net, peer, "pex_msg_send failed: %s", strerror(errno));
+}
+
+static void pex_msg_send_ext(struct network *net, struct network_peer *peer,
+			     struct sockaddr_in6 *addr)
+{
+	char addrbuf[INET6_ADDRSTRLEN];
+
+	if (!addr)
+		return pex_msg_send(net, peer);
+
+	if (__pex_msg_send(-1, addr) < 0)
+		D_NET(net, "pex_msg_send_ext(%s) failed: %s",
+		      inet_ntop(addr->sin6_family, (const void *)&addr->sin6_addr, addrbuf,
+				sizeof(addrbuf)),
+		      strerror(errno));
 }
 
 static void
@@ -136,7 +102,6 @@ pex_send_hello(struct network *net, struct network_peer *peer)
 
 	pex_msg_send(net, peer);
 }
-
 
 static int
 pex_msg_add_peer_endpoint(struct network *net, struct network_peer *peer,
@@ -195,12 +160,54 @@ network_pex_handle_endpoint_change(struct network *net, struct network_peer *pee
 	}
 }
 
+static void
+network_pex_host_request_update(struct network *net, struct network_pex_host *host)
+{
+	char addrstr[INET6_ADDRSTRLEN];
+	uint64_t version = 0;
+
+	if (net->net_data_len)
+		version = net->net_data_version;
+
+	D("request network data from host %s",
+	  inet_ntop(host->endpoint.sa.sa_family,
+		    (host->endpoint.sa.sa_family == AF_INET6 ?
+		     (const void *)&host->endpoint.in6.sin6_addr :
+		     (const void *)&host->endpoint.in.sin_addr),
+		    addrstr, sizeof(addrstr)));
+
+	if (!pex_msg_update_request_init(net->config.pubkey, net->config.key,
+					 net->config.auth_key, &host->endpoint,
+					 version, true))
+		return;
+	__pex_msg_send(-1, &host->endpoint);
+}
+
+static void
+network_pex_request_update_cb(struct uloop_timeout *t)
+{
+	struct network *net = container_of(t, struct network, pex.request_update_timer);
+	struct network_pex *pex = &net->pex;
+	struct network_pex_host *host;
+
+	uloop_timeout_set(t, 5000);
+
+	if (list_empty(&pex->hosts))
+		return;
+
+	host = list_first_entry(&pex->hosts, struct network_pex_host, list);
+	list_move_tail(&host->list, &pex->hosts);
+	network_pex_host_request_update(net, host);
+}
+
 void network_pex_init(struct network *net)
 {
 	struct network_pex *pex = &net->pex;
 
 	memset(pex, 0, sizeof(*pex));
 	pex->fd.fd = -1;
+	INIT_LIST_HEAD(&pex->hosts);
+	pex->request_update_timer.cb = network_pex_request_update_cb;
 }
 
 static void
@@ -264,6 +271,29 @@ network_pex_send_ping(struct network *net, struct network_peer *peer)
 	pex_msg_send(net, peer);
 }
 
+static void
+network_pex_send_update_request(struct network *net, struct network_peer *peer,
+				struct sockaddr_in6 *addr)
+{
+	union network_endpoint ep = {};
+	uint64_t version = 0;
+
+	if (addr)
+		memcpy(&ep.in6, addr, sizeof(ep.in6));
+	else
+		pex_get_peer_addr(&ep.in6, net, peer);
+
+	if (net->net_data_len)
+		version = net->net_data_version;
+
+	if (!pex_msg_update_request_init(net->config.pubkey, net->config.key,
+					 net->config.auth_key, &ep,
+					 version, !!addr))
+		return;
+
+	pex_msg_send_ext(net, peer, addr);
+}
+
 void network_pex_event(struct network *net, struct network_peer *peer,
 		       enum pex_event ev)
 {
@@ -278,6 +308,8 @@ void network_pex_event(struct network *net, struct network_peer *peer,
 	switch (ev) {
 	case PEX_EV_HANDSHAKE:
 		pex_send_hello(net, peer);
+		if (net->config.type == NETWORK_TYPE_DYNAMIC)
+			network_pex_send_update_request(net, peer, NULL);
 		break;
 	case PEX_EV_ENDPOINT_CHANGE:
 		network_pex_handle_endpoint_change(net, peer);
@@ -383,6 +415,100 @@ network_pex_recv_ping(struct network *net, struct network_peer *peer)
 }
 
 static void
+network_pex_recv_update_request(struct network *net, struct network_peer *peer,
+				const uint8_t *data, size_t len,
+				struct sockaddr_in6 *addr)
+{
+	struct pex_update_request *req = (struct pex_update_request *)data;
+	struct pex_msg_update_send_ctx ctx = {};
+	uint64_t req_version = be64_to_cpu(req->cur_version);
+	int *query_count;
+	bool done = false;
+
+	if (len < sizeof(struct pex_update_request))
+		return;
+
+	if (net->config.type != NETWORK_TYPE_DYNAMIC)
+		return;
+
+	if (peer)
+		query_count = &peer->state.num_net_queries;
+	else
+		query_count = &net->num_net_queries;
+
+	if (++*query_count > 10)
+		return;
+
+	D("receive update request, local version=%"PRIu64", remote version=%"PRIu64, net->net_data_version, req_version);
+
+	if (req_version >= net->net_data_version) {
+		struct pex_update_response_no_data *res;
+
+		pex_msg_init_ext(net, PEX_MSG_UPDATE_RESPONSE_NO_DATA, !!addr);
+		res = pex_msg_append(sizeof(*res));
+		res->req_id = req->req_id;
+		res->cur_version = cpu_to_be64(net->net_data_version);
+		pex_msg_send_ext(net, peer, addr);
+	}
+
+	if (req_version > net->net_data_version)
+		network_pex_send_update_request(net, peer, addr);
+
+	if (!peer || !net->net_data_len)
+		return;
+
+	if (req_version >= net->net_data_version)
+		return;
+
+	pex_msg_update_response_init(&ctx, net->config.pubkey, net->config.auth_key,
+				     peer->key, !!addr, (void *)data,
+				     net->net_data, net->net_data_len);
+	while (!done) {
+		pex_msg_send_ext(net, peer, addr);
+		done = !pex_msg_update_response_continue(&ctx);
+	}
+}
+
+static void
+network_pex_recv_update_response(struct network *net, const uint8_t *data, size_t len,
+			      struct sockaddr_in6 *addr, enum pex_opcode op)
+{
+	struct network_peer *peer;
+	void *net_data;
+	int net_data_len = 0;
+	uint64_t version = 0;
+	bool no_prev_data = !net->net_data_len;
+
+	if (net->config.type != NETWORK_TYPE_DYNAMIC)
+		return;
+
+	net_data = pex_msg_update_response_recv(data, len, op, &net_data_len, &version);
+	if (!net_data)
+		return;
+
+	if (version <= net->net_data_version) {
+		free(net_data);
+		return;
+	}
+
+	D_NET(net, "received updated network data, len=%d", net_data_len);
+	free(net->net_data);
+
+	net->net_data = net_data;
+	net->net_data_len = net_data_len;
+	net->net_data_version = version;
+	if (network_save_dynamic(net) < 0)
+		return;
+
+	uloop_timeout_set(&net->reload_timer, no_prev_data ? 1 : UNETD_DATA_UPDATE_DELAY);
+	vlist_for_each_element(&net->peers, peer, node) {
+		if (!peer->state.connected)
+			continue;
+		network_pex_send_update_request(net, peer, NULL);
+	}
+}
+
+static void
 network_pex_recv(struct network *net, struct network_peer *peer, struct pex_hdr *hdr)
 {
 	const void *data = hdr + 1;
@@ -405,6 +531,16 @@ network_pex_recv(struct network *net, struct network_peer *peer, struct pex_hdr 
 		network_pex_recv_ping(net, peer);
 		break;
 	case PEX_MSG_PONG:
+		break;
+	case PEX_MSG_UPDATE_REQUEST:
+		network_pex_recv_update_request(net, peer, data, hdr->len,
+						NULL);
+		break;
+	case PEX_MSG_UPDATE_RESPONSE:
+	case PEX_MSG_UPDATE_RESPONSE_DATA:
+	case PEX_MSG_UPDATE_RESPONSE_NO_DATA:
+		network_pex_recv_update_response(net, data, hdr->len,
+					      NULL, hdr->opcode);
 		break;
 	}
 }
@@ -460,6 +596,60 @@ network_pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 	}
 }
 
+static void
+network_pex_create_host(struct network *net, union network_endpoint *ep)
+{
+	struct network_pex *pex = &net->pex;
+	struct network_pex_host *host;
+
+	host = calloc(1, sizeof(*host));
+	memcpy(&host->endpoint, ep, sizeof(host->endpoint));
+	list_add_tail(&host->list, &pex->hosts);
+	network_pex_host_request_update(net, host);
+}
+
+static void
+network_pex_open_auth_connect(struct network *net)
+{
+	struct network_pex *pex = &net->pex;
+	struct network_peer *peer;
+	struct blob_attr *cur;
+	int rem;
+
+	if (net->config.type != NETWORK_TYPE_DYNAMIC)
+		return;
+
+	uloop_timeout_set(&pex->request_update_timer, 5000);
+
+	vlist_for_each_element(&net->peers, peer, node) {
+		union network_endpoint ep = {};
+
+		if (!peer->endpoint)
+			continue;
+
+		if (network_get_endpoint(&ep, peer->endpoint,
+					 UNETD_GLOBAL_PEX_PORT, 0) < 0)
+			continue;
+
+		ep.in.sin_port = htons(UNETD_GLOBAL_PEX_PORT);
+		network_pex_create_host(net, &ep);
+	}
+
+	if (!net->config.auth_connect)
+		return;
+
+	blobmsg_for_each_attr(cur, net->config.auth_connect, rem) {
+		union network_endpoint ep = {};
+
+		if (network_get_endpoint(&ep, blobmsg_get_string(cur),
+					 UNETD_GLOBAL_PEX_PORT, 0) < 0)
+			continue;
+
+		network_pex_create_host(net, &ep);
+	}
+}
+
+
 int network_pex_open(struct network *net)
 {
 	struct network_host *local_host = net->net_config.local_host;
@@ -468,6 +658,8 @@ int network_pex_open(struct network *net)
 	struct sockaddr_in6 sin6 = {};
 	int yes = 1;
 	int fd;
+
+	network_pex_open_auth_connect(net);
 
 	if (!local_host || !net->net_config.pex_port)
 		return 0;
@@ -511,6 +703,13 @@ close:
 void network_pex_close(struct network *net)
 {
 	struct network_pex *pex = &net->pex;
+	struct network_pex_host *host, *tmp;
+
+	uloop_timeout_cancel(&pex->request_update_timer);
+	list_for_each_entry_safe(host, tmp, &pex->hosts, list) {
+		list_del(&host->list);
+		free(host);
+	}
 
 	if (pex->fd.fd < 0)
 		return;
@@ -518,4 +717,65 @@ void network_pex_close(struct network *net)
 	uloop_fd_delete(&pex->fd);
 	close(pex->fd.fd);
 	network_pex_init(net);
+}
+
+static struct network *
+global_pex_find_network(const uint8_t *id)
+{
+	struct network *net;
+
+	avl_for_each_element(&networks, net, node) {
+		if (!memcmp(id, net->config.auth_key, PEX_ID_LEN))
+			return net;
+	}
+
+	return NULL;
+}
+
+static void
+global_pex_recv(struct pex_hdr *hdr, struct sockaddr_in6 *addr)
+{
+	struct pex_ext_hdr *ehdr = (void *)(hdr + 1);
+	struct network_peer *peer;
+	struct network *net;
+	void *data = (void *)(ehdr + 1);
+
+	if (hdr->version != 0)
+		return;
+
+	net = global_pex_find_network(ehdr->auth_id);
+	if (!net || net->config.type != NETWORK_TYPE_DYNAMIC)
+		return;
+
+	*(uint64_t *)hdr->id ^= pex_network_hash(net->config.auth_key, ehdr->nonce);
+
+	D("PEX global rx op=%d", hdr->opcode);
+	switch (hdr->opcode) {
+	case PEX_MSG_HELLO:
+	case PEX_MSG_NOTIFY_PEERS:
+	case PEX_MSG_QUERY:
+	case PEX_MSG_PING:
+	case PEX_MSG_PONG:
+		break;
+	case PEX_MSG_UPDATE_REQUEST:
+		peer = pex_msg_peer(net, hdr->id);
+		network_pex_recv_update_request(net, peer, data, hdr->len,
+						addr);
+		break;
+	case PEX_MSG_UPDATE_RESPONSE:
+	case PEX_MSG_UPDATE_RESPONSE_DATA:
+	case PEX_MSG_UPDATE_RESPONSE_NO_DATA:
+		network_pex_recv_update_response(net, data, hdr->len, addr, hdr->opcode);
+		break;
+	}
+}
+
+int global_pex_open(void)
+{
+	struct sockaddr_in6 sin6 = {};
+
+	sin6.sin6_family = AF_INET6;
+	sin6.sin6_port = htons(global_pex_port);
+
+	return pex_open(&sin6, sizeof(sin6), global_pex_recv, true);
 }

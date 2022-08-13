@@ -18,6 +18,7 @@ static struct cmdline_network *cmd_nets;
 static const char *hosts_file;
 const char *mssfix_path = UNETD_MSS_BPF_PATH;
 const char *data_dir = UNETD_DATA_DIR;
+int global_pex_port = UNETD_GLOBAL_PEX_PORT;
 bool debug;
 
 static void
@@ -98,7 +99,7 @@ int main(int argc, char **argv)
 	struct cmdline_network *net;
 	int ch;
 
-	while ((ch = getopt(argc, argv, "D:dh:M:N:")) != -1) {
+	while ((ch = getopt(argc, argv, "D:dh:M:N:P:")) != -1) {
 		switch (ch) {
 		case 'D':
 			data_dir = optarg;
@@ -118,14 +119,19 @@ int main(int argc, char **argv)
 		case 'M':
 			mssfix_path = optarg;
 			break;
+		case 'P':
+			global_pex_port = atoi(optarg);
+			break;
 		}
 	}
 
 	uloop_init();
 	unetd_ubus_init();
 	unetd_write_hosts();
+	global_pex_open();
 	add_networks();
 	uloop_run();
+	pex_close();
 	network_free_all();
 	uloop_done();
 

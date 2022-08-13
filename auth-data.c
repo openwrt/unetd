@@ -7,7 +7,7 @@
 #include "auth-data.h"
 
 int unet_auth_data_validate(const uint8_t *key, const void *buf, size_t len,
-			    const char **json_data)
+			    uint64_t *timestamp, const char **json_data)
 {
 	const struct unet_auth_hdr *hdr = buf;
 	const struct unet_auth_data *data = net_data_auth_data_hdr(buf);
@@ -23,7 +23,7 @@ int unet_auth_data_validate(const uint8_t *key, const void *buf, size_t len,
 	    data->timestamp == 0)
 		return -1;
 
-	if (memcmp(data->pubkey, key, EDSIGN_PUBLIC_KEY_SIZE) != 0)
+	if (key && memcmp(data->pubkey, key, EDSIGN_PUBLIC_KEY_SIZE) != 0)
 		return -2;
 
 	edsign_verify_init(&vst, hdr->signature, data->pubkey);
@@ -33,6 +33,9 @@ int unet_auth_data_validate(const uint8_t *key, const void *buf, size_t len,
 
 	if (*(char *)(data + len - 1) != 0)
 		return -2;
+
+	if (timestamp)
+		*timestamp = be64_to_cpu(data->timestamp);
 
 	if (json_data)
 		*json_data = (const char *)(data + 1);

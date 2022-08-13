@@ -230,6 +230,10 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 	struct network_host *host;
 	union network_endpoint *ep;
 
+	avl_for_each_element(&net->hosts, host, node)
+		host->peer.state.num_net_queries = 0;
+	net->num_net_queries = 0;
+
 	if (!net->net_config.keepalive)
 		return;
 

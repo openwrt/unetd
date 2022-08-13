@@ -30,7 +30,7 @@ struct unet_auth_data {
 } __packed;
 
 int unet_auth_data_validate(const uint8_t *key, const void *buf, size_t len,
-			    const char **json_data);
+			    uint64_t *timestamp, const char **json_data);
 
 static inline const struct unet_auth_data *
 net_data_auth_data_hdr(const void *net_data)

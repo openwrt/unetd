@@ -37,6 +37,7 @@ struct network {
 		const char *domain;
 		struct blob_attr *tunnels;
 		struct blob_attr *net_data;
+		struct blob_attr *auth_connect;
 	} config;
 
 	struct {
@@ -50,6 +51,10 @@ struct network {
 
 	void *net_data;
 	size_t net_data_len;
+	uint64_t net_data_version;
+	int num_net_queries;
+
+	struct uloop_timeout reload_timer;
 
 	int ifindex;
 	struct network_host *prev_local_host;
@@ -76,6 +81,7 @@ enum {
 	NETWORK_ATTR_KEEPALIVE,
 	NETWORK_ATTR_DOMAIN,
 	NETWORK_ATTR_TUNNELS,
+	NETWORK_ATTR_AUTH_CONNECT,
 	__NETWORK_ATTR_MAX,
 };
 
@@ -88,6 +94,7 @@ static inline const char *network_name(struct network *net)
 }
 
 void network_fill_host_addr(union network_addr *addr, uint8_t *key);
+int network_save_dynamic(struct network *net);
 void network_free_all(void);
 
 int unetd_network_add(const char *name, struct blob_attr *config);

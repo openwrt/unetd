@@ -13,16 +13,19 @@
 #include "utils.h"
 #include "siphash.h"
 #include "wg.h"
+#include "pex-msg.h"
 #include "pex.h"
 #include "network.h"
 #include "host.h"
 #include "service.h"
 #include "ubus.h"
 #include "auth-data.h"
+#include "chacha20.h"
 
 extern const char *mssfix_path;
 extern const char *data_dir;
 extern bool debug;
+extern int global_pex_port;
 
 #define D(format, ...)								\
 	do {									\
@@ -39,6 +42,8 @@ extern bool debug;
 #define UNETD_DATA_DIR "/etc/unetd"
 #define UNETD_MSS_BPF_PATH	"/lib/bpf/mss.o"
 #define UNETD_MSS_PRIO_BASE	0x130
+
+#define UNETD_DATA_UPDATE_DELAY	(10 * 1000)
 
 void unetd_write_hosts(void);
 int unetd_attach_mssfix(int ifindex, int mtu);

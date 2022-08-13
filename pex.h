@@ -9,8 +9,15 @@
 
 struct network;
 
+struct network_pex_host {
+	struct list_head list;
+	union network_endpoint endpoint;
+};
+
 struct network_pex {
 	struct uloop_fd fd;
+	struct list_head hosts;
+	struct uloop_timeout request_update_timer;
 };
 
 enum pex_event {
@@ -31,5 +38,7 @@ static inline bool network_pex_active(struct network_pex *pex)
 {
 	return pex->fd.fd >= 0;
 }
+
+int global_pex_open(void);
 
 #endif
