@@ -56,6 +56,12 @@ static __always_inline struct ethhdr *
 skb_parse_ethernet(struct skb_parser_info *info)
 {
 	struct ethhdr *eth;
+	int len;
+
+	len = sizeof(*eth) + 2 * sizeof(struct vlan_hdr) + sizeof(struct ipv6hdr);
+	if (len > info->skb->len)
+		len = info->skb->len;
+	bpf_skb_pull_data(info->skb, len);
 
 	eth = skb_info_ptr(info, sizeof(*eth));
 	if (!eth)
