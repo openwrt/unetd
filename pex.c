@@ -366,7 +366,7 @@ network_pex_recv_peers(struct network *net, struct network_peer *peer,
 		if (cur == peer || cur == local)
 			continue;
 
-		D_PEER(net, peer, "received peer address for %s\n",
+		D_PEER(net, peer, "received peer address for %s",
 		       network_peer_name(cur));
 		flags = ntohs(data->flags);
 		ep = &cur->state.next_endpoint;
