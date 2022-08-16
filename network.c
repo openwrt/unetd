@@ -474,6 +474,7 @@ network_set_config(struct network *net, struct blob_attr *config)
 		      blobmsg_len(net->config.data));
 
 	if ((cur = tb[NETWORK_ATTR_TYPE]) == NULL ||
+	    !strlen(blobmsg_get_string(cur)) ||
 	    !strcmp(blobmsg_get_string(cur), "dynamic"))
 		net->config.type = NETWORK_TYPE_DYNAMIC;
 	else if (!strcmp(blobmsg_get_string(cur), "file"))
@@ -510,13 +511,16 @@ network_set_config(struct network *net, struct blob_attr *config)
 		break;
 	}
 
-	if ((cur = tb[NETWORK_ATTR_INTERFACE]) != NULL)
+	if ((cur = tb[NETWORK_ATTR_INTERFACE]) != NULL &&
+	    strlen(blobmsg_get_string(cur)) > 0)
 		net->config.interface = blobmsg_get_string(cur);
 
-	if ((cur = tb[NETWORK_ATTR_UPDATE_CMD]) != NULL)
+	if ((cur = tb[NETWORK_ATTR_UPDATE_CMD]) != NULL &&
+	    strlen(blobmsg_get_string(cur)) > 0)
 		net->config.update_cmd = blobmsg_get_string(cur);
 
-	if ((cur = tb[NETWORK_ATTR_DOMAIN]) != NULL)
+	if ((cur = tb[NETWORK_ATTR_DOMAIN]) != NULL &&
+	    strlen(blobmsg_get_string(cur)) > 0)
 		net->config.domain = blobmsg_get_string(cur);
 
 	if ((cur = tb[NETWORK_ATTR_TUNNELS]) != NULL)
