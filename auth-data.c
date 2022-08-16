@@ -31,7 +31,7 @@ int unet_auth_data_validate(const uint8_t *key, const void *buf, size_t len,
 	if (!edsign_verify(&vst, hdr->signature, data->pubkey))
 		return -3;
 
-	if (*(char *)(data + len - 1) != 0)
+	if (((char *)data)[len - 1] != 0)
 		return -2;
 
 	if (timestamp)

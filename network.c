@@ -436,6 +436,7 @@ static int network_setup(struct network *net)
 
 static void network_teardown(struct network *net)
 {
+	uloop_timeout_cancel(&net->connect_timer);
 	uloop_timeout_cancel(&net->reload_timer);
 	network_do_update(net, false);
 	network_pex_close(net);
