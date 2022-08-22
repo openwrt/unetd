@@ -4,39 +4,58 @@
 		"peer-exchange-port": 3458,
 		"keepalive": 10
 	},
-
 	"hosts": {
 		"master": {
 			"key": "25sPrbtEtIiANFr00tC5MS2UMfXmHFj/AJyDi4wR8n4=",
 			"endpoint": "192.168.1.3",
-			"subnet": [ "192.168.3.0/24" ],
-			"ipaddr": [ "192.168.3.1" ]
+			"subnet": [
+				"192.168.3.0/24"
+			],
+			"ipaddr": [
+				"192.168.3.1"
+			]
 		},
 		"ap1": {
 			"key": "mxQQxpwinlDxy0bp564b25il1oDiaf/a8jkaKQBcjw4=",
-			"groups": [ "ap" ],
-			"subnet": [ "192.168.4.0/24" ],
-			"ipaddr": [ "192.168.4.1" ],
+			"groups": [
+				"ap"
+			],
+			"subnet": [
+				"192.168.4.0/24"
+			],
+			"ipaddr": [
+				"192.168.4.1"
+			],
 			"port": 3457
 		},
 		"ap2": {
 			"key": "+hiP+1FZci9Hp44gWEPigbsMHMe6De7nnMbVDJFhDjU=",
-			"groups": [ "ap" ],
-			"subnet": [ "192.168.5.0/24" ],
-			"ipaddr": [ "192.168.5.1" ],
+			"groups": [
+				"ap"
+			],
+			"subnet": [
+				"192.168.5.0/24"
+			],
+			"ipaddr": [
+				"192.168.5.1"
+			],
 			"port": 3457
 		}
 	},
-
 	"services": {
 		"l2-tunnel": {
 			"type": "vxlan",
 			"config": {
 			},
-			"members": [ "master", "@ap" ]
+			"members": [
+				"master",
+				"@ap"
+			]
 		},
 		"usteer": {
-			"members": [ "@ap" ]
+			"members": [
+				"@ap"
+			]
 		}
 	}
 }
