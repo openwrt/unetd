@@ -462,15 +462,17 @@ network_pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 
 int network_pex_open(struct network *net)
 {
-	struct network_peer *local = &net->net_config.local_host->peer;
+	struct network_host *local_host = net->net_config.local_host;
+	struct network_peer *local;
 	struct network_pex *pex = &net->pex;
 	struct sockaddr_in6 sin6 = {};
 	int yes = 1;
 	int fd;
 
-	if (!local || !net->net_config.pex_port)
+	if (!local_host || !net->net_config.pex_port)
 		return 0;
 
+	local = &local_host->peer;
 	fd = socket(PF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	if (fd < 0)
 		return -1;
