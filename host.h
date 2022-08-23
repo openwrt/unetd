@@ -49,13 +49,20 @@ struct network_group {
 
 static inline const char *network_host_name(struct network_host *host)
 {
+	if (!host)
+		return "(none)";
+
 	return host->node.key;
 }
 
 static inline const char *network_peer_name(struct network_peer *peer)
 {
-	struct network_host *host = container_of(peer, struct network_host, peer);
+	struct network_host *host;
 
+	if (!peer)
+		return "(none)";
+
+	host = container_of(peer, struct network_host, peer);
 	return network_host_name(host);
 }
 
