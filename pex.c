@@ -65,7 +65,7 @@ static void pex_msg_send(struct network *net, struct network_peer *peer)
 {
 	struct sockaddr_in6 sin6 = {};
 
-	if (!peer || peer == &net->net_config.local_host->peer || !peer->state.connected)
+	if (!peer || peer == &net->net_config.local_host->peer)
 		return;
 
 	pex_get_peer_addr(&sin6, net, peer);
