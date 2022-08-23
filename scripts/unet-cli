@@ -55,6 +55,7 @@ function usage() {
 	     "	auth_key=<key>				use <key> as public auth key on the remote host\n",
 	     "	priv_key=<key>				use <key> as private host key on the remote host (default: generate a new key)\n",
 	     "	interface=<name>			use <name> as interface in /etc/config/network on the remote host\n",
+	     "	domain=<name>				use <name> as hosts file domain on the remote host (default: unet)\n",
 	     "	connect=<val>[,<val>...]		set IP addresses that the host will contact for network updates\n",
 	     "	tunnels=<ifname>:<service>[,...]	set active tunnel devices\n",
 	     " service options (add-service, set-service):\n",
@@ -139,6 +140,7 @@ set_interface_attrs() {
 	[ -n "$AUTH_KEY" ] && uci set "network.$INTERFACE.auth_key=$AUTH_KEY"
 	set_list connect "$CONNECT"
 	set_list tunnels "$TUNNELS"
+	uci set "network.$INTERFACE.domain=$DOMAIN"
 }
 
 check_interface() {
@@ -147,7 +149,6 @@ check_interface() {
 set network.$INTERFACE=interface
 set network.$INTERFACE.proto=unet
 set network.$INTERFACE.device=$INTERFACE
-set network.$INTERFACE.domain=unet
 EOF
 }
 
@@ -233,6 +234,7 @@ function sync_ssh_host(host) {
 	let connect = replace(args.connect ?? "", ",", " ");
 	let auth_key = args.auth_key;
 	let tunnels = replace(replace(args.tunnels ?? "", ",", " "), ":", "=");
+	let domain = args.domain ?? "unet";
 
 	if (!auth_key) {
 		let fh = fs.mkstemp();
@@ -252,6 +254,7 @@ function sync_ssh_host(host) {
 	fh.write("CONNECT='" + connect + "'\n");
 	fh.write("AUTH_KEY='" + auth_key + "'\n");
 	fh.write("TUNNELS='" + tunnels + "'\n");
+	fh.write("DOMAIN='" + domain + "'\n");
 	fh.write(ssh_script);
 	fh.flush();
 	fh.seek();
