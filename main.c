@@ -32,7 +32,9 @@ network_write_hosts(struct network *net, FILE *f)
 
 	avl_for_each_element(&net->hosts, host, node) {
 		inet_ntop(AF_INET6, &host->peer.local_addr, ip, sizeof(ip));
-		fprintf(f, "%s\t%s\n", ip, network_host_name(host));
+		fprintf(f, "%s\t%s%s%s\n", ip, network_host_name(host),
+			net->config.domain ? "." : "",
+			net->config.domain ? net->config.domain : "");
 	}
 }
 
