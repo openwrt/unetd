@@ -51,6 +51,7 @@ function usage() {
 	     "	ipaddr=[+|-]<val>[,<val>...]		set/add/remove host ip addresses\n",
 	     "	subnet=[+|-]<val>[,<val>...]		set/add/remove host announced subnets\n",
 	     "	endpoint=<val>				set host endpoint address\n",
+	     "	gateway=<name>				set host gateway (using name of other host)\n",
 	     " ssh host options (add-ssh-host, set-ssh-host)\n",
 	     "	auth_key=<key>				use <key> as public auth key on the remote host\n",
 	     "	priv_key=<key>				use <key> as private host key on the remote host (default: generate a new key)\n",
@@ -211,6 +212,7 @@ function set_host(name) {
 	set_fields(host, {
 		key: "string",
 		endpoint: "string",
+		gateway: "string",
 		port: "int",
 		ipaddr: "array",
 		subnet: "array",

@@ -279,30 +279,15 @@ wg_user_init_local(struct network *net, struct network_peer *peer)
 	return wg_req_done(&req);
 }
 
-static int
-wg_user_peer_update(struct network *net, struct network_peer *peer, enum wg_update_cmd cmd)
+static void
+wg_user_peer_req_add_allowed_ip(struct wg_req *req, struct network_peer *peer)
 {
-	struct blob_attr *cur;
-	struct wg_req req;
 	char addr[INET6_ADDRSTRLEN];
-	char key[WG_KEY_LEN_HEX];
+	struct blob_attr *cur;
 	int rem;
 
-	if (wg_req_init(&req, net, true))
-		return -1;
-
-	key_to_hex(key, peer->key);
-	wg_req_set(&req, "public_key", key);
-
-	if (cmd == WG_PEER_DELETE) {
-		wg_req_set(&req, "remove", "true");
-		goto out;
-	}
-
-	wg_req_set(&req, "replace_allowed_ips", "true");
-
 	inet_ntop(AF_INET6, &peer->local_addr.in6, addr, sizeof(addr));
-	wg_req_printf(&req, "allowed_ip", "%s/128", addr);
+	wg_req_printf(req, "allowed_ip", "%s/128", addr);
 
 	blobmsg_for_each_attr(cur, peer->ipaddr, rem) {
 		const char *str = blobmsg_get_string(cur);
@@ -320,7 +305,7 @@ wg_user_peer_update(struct network *net, struct network_peer *peer, enum wg_upda
 		if (inet_pton(af, str, &in6) != 1)
 			continue;
 
-		wg_req_printf(&req, "allowed_ip", "%s/%d", str, mask);
+		wg_req_printf(req, "allowed_ip", "%s/%d", str, mask);
 	}
 
 	blobmsg_for_each_attr(cur, peer->subnet, rem) {
@@ -335,8 +320,32 @@ wg_user_peer_update(struct network *net, struct network_peer *peer, enum wg_upda
 			continue;
 
 		inet_ntop(af, &addr, buf, sizeof(buf));
-		wg_req_printf(&req, "allowed_ip", "%s/%d", buf, mask);
+		wg_req_printf(req, "allowed_ip", "%s/%d", buf, mask);
 	}
+}
+
+static int
+wg_user_peer_update(struct network *net, struct network_peer *peer, enum wg_update_cmd cmd)
+{
+	struct network_host *host;
+	struct wg_req req;
+	char key[WG_KEY_LEN_HEX];
+
+	if (wg_req_init(&req, net, true))
+		return -1;
+
+	key_to_hex(key, peer->key);
+	wg_req_set(&req, "public_key", key);
+
+	if (cmd == WG_PEER_DELETE) {
+		wg_req_set(&req, "remove", "true");
+		goto out;
+	}
+
+	wg_req_set(&req, "replace_allowed_ips", "true");
+	wg_user_peer_req_add_allowed_ip(&req, peer);
+	for_each_routed_host(host, net, peer)
+		wg_user_peer_req_add_allowed_ip(&req, &host->peer);
 
 out:
 	return wg_req_done(&req);

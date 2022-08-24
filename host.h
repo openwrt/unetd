@@ -36,6 +36,7 @@ struct network_peer {
 struct network_host {
 	struct avl_node node;
 
+	const char *gateway;
 	struct network_peer peer;
 };
 
@@ -55,6 +56,11 @@ static inline const char *network_host_name(struct network_host *host)
 	return host->node.key;
 }
 
+static inline bool network_host_is_peer(struct network_host *host)
+{
+	return !!host->peer.node.avl.key;
+}
+
 static inline const char *network_peer_name(struct network_peer *peer)
 {
 	struct network_host *host;
@@ -65,6 +71,29 @@ static inline const char *network_peer_name(struct network_peer *peer)
 	host = container_of(peer, struct network_host, peer);
 	return network_host_name(host);
 }
+
+
+static inline bool
+network_host_uses_peer_route(struct network_host *host, struct network *net,
+			    struct network_peer *peer)
+{
+	if (&host->peer == peer || host == net->net_config.local_host)
+		return false;
+
+	if (net->net_config.local_host->gateway &&
+	    !strcmp(net->net_config.local_host->gateway, network_peer_name(peer)))
+		return true;
+
+	if (!host->gateway)
+		return false;
+
+	return !strcmp(host->gateway, network_peer_name(peer));
+}
+
+#define for_each_routed_host(cur_host, net, peer)			\
+	avl_for_each_element(&(net)->hosts, cur_host, node)		\
+		if (network_host_uses_peer_route(host, net, peer))
+
 
 void network_hosts_update_start(struct network *net);
 void network_hosts_update_done(struct network *net);
