@@ -2,13 +2,19 @@
 
 let fs = require("fs");
 
-let script_dir = sourcepath(0, true);
-if (fs.basename(script_dir) == "scripts") {
-	unet_tool = fs.dirname(script_dir) + "/unet-tool";
-	if (!fs.access(unet_tool, "x")) {
-		warn("unet-tool missing\n");
+function assert(cond, message) {
+	if (!cond) {
+		warn(message, "\n");
 		exit(1);
 	}
+
+	return true;
+}
+
+let script_dir = sourcepath(0, true);
+if (fs.basename(script_dir) == "scripts") {
+	unet_tool = `${fs.dirname(script_dir)}/unet-tool`;
+	assert(fs.access(unet_tool, "x"), "unet-tool missing");
 } else {
 	unet_tool = "unet-tool";
 }
@@ -21,55 +27,59 @@ defaults = {
 	keepalive: 10,
 };
 
+const usage_message = `
+Usage: ${fs.basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<value> ...]
+
+     Commands:
+      - create:					Create a new network file
+      - set-config:					Change network config parameters
+      - add-host <name>:				Add a host
+      - add-ssh-host <name> <host>:			Add a remote OpenWrt host via SSH
+     						(<host> can contain SSH options as well)
+      - set-host <name>:				Change host settings
+      - set-ssh-host <name> <host>:			Update local and remote host settings
+      - add-service <name>:				Add a service
+      - set-service <name>:				Change service settings
+      - sign						Sign network data
+
+     Flags:
+      -p:						Print modified JSON instead of updating file
+
+     Options:
+      - config options (create, set-config):
+     	port=<val>				set tunnel port (default: ${defaults.port})
+     	pex_port=<val>				set peer-exchange port (default: ${defaults.pex_port})
+     	keepalive=<val>				set keepalive interval (seconds, 0: off, default: ${defaults.keepalive})
+      host options (add-host, add-ssh-host, set-host):
+     	key=<val>				set host public key (required for add-host)
+     	port=<val>				set host tunnel port number
+     	groups=[+|-]<val>[,<val>...]		set/add/remove groups that the host is a member of
+     	ipaddr=[+|-]<val>[,<val>...]		set/add/remove host ip addresses
+     	subnet=[+|-]<val>[,<val>...]		set/add/remove host announced subnets
+     	endpoint=<val>				set host endpoint address
+     	gateway=<name>				set host gateway (using name of other host)
+      ssh host options (add-ssh-host, set-ssh-host)
+     	auth_key=<key>				use <key> as public auth key on the remote host
+     	priv_key=<key>				use <key> as private host key on the remote host (default: generate a new key)
+     	interface=<name>			use <name> as interface in /etc/config/network on the remote host
+     	domain=<name>				use <name> as hosts file domain on the remote host (default: unet)
+     	connect=<val>[,<val>...]		set IP addresses that the host will contact for network updates
+     	tunnels=<ifname>:<service>[,...]	set active tunnel devices
+      service options (add-service, set-service):
+     	type=<val>				set service type (required for add-service)
+     	members=[+|-]<val>[,<val>...]		set/add/remove service member hosts/groups
+      vxlan service options (add-service, set-service):
+     	id=<val>				set VXLAN ID
+     	port=<val>				set VXLAN port
+     	mtu=<val>				set VXLAN device MTU
+     	forward_ports=[+|-]<val>[,<val>...]	set members allowed to receive broadcast/multicast/unknown-unicast
+      sign options:
+     	upload=<ip>[,<ip>...]			upload signed file to hosts
+
+`;
+
 function usage() {
-	warn("Usage: ",fs.basename(sourcepath())," [<flags>] <file> <command> [<args>] [<option>=<value> ...]\n",
-	     "\n",
-	     "Commands:\n",
-	     " - create:					Create a new network file\n",
-	     " - set-config:					Change network config parameters\n",
-	     " - add-host <name>:				Add a host\n",
-	     " - add-ssh-host <name> <host>:			Add a remote OpenWrt host via SSH\n",
-	     "						(<host> can contain SSH options as well)\n",
-	     " - set-host <name>:				Change host settings\n",
-	     " - set-ssh-host <name> <host>:			Update local and remote host settings\n",
-	     " - add-service <name>:				Add a service\n",
-	     " - set-service <name>:				Change service settings\n",
-	     " - sign						Sign network data\n",
-	     "\n",
-	     "Flags:\n",
-	     " -p:						Print modified JSON instead of updating file\n",
-	     "\n",
-	     "Options:\n",
-	     " - config options (create, set-config):\n",
-	     "	port=<val>				set tunnel port (default: ", defaults.port, ")\n",
-	     "	pex_port=<val>				set peer-exchange port (default: ", defaults.pex_port, ")\n",
-	     "	keepalive=<val>				set keepalive interval (seconds, 0: off, default: ", defaults.keepalive,")\n",
-	     " host options (add-host, add-ssh-host, set-host):\n",
-	     "	key=<val>				set host public key (required for add-host)\n",
-	     "	port=<val>				set host tunnel port number\n",
-	     "	groups=[+|-]<val>[,<val>...]		set/add/remove groups that the host is a member of\n",
-	     "	ipaddr=[+|-]<val>[,<val>...]		set/add/remove host ip addresses\n",
-	     "	subnet=[+|-]<val>[,<val>...]		set/add/remove host announced subnets\n",
-	     "	endpoint=<val>				set host endpoint address\n",
-	     "	gateway=<name>				set host gateway (using name of other host)\n",
-	     " ssh host options (add-ssh-host, set-ssh-host)\n",
-	     "	auth_key=<key>				use <key> as public auth key on the remote host\n",
-	     "	priv_key=<key>				use <key> as private host key on the remote host (default: generate a new key)\n",
-	     "	interface=<name>			use <name> as interface in /etc/config/network on the remote host\n",
-	     "	domain=<name>				use <name> as hosts file domain on the remote host (default: unet)\n",
-	     "	connect=<val>[,<val>...]		set IP addresses that the host will contact for network updates\n",
-	     "	tunnels=<ifname>:<service>[,...]	set active tunnel devices\n",
-	     " service options (add-service, set-service):\n",
-	     "	type=<val>				set service type (required for add-service)\n",
-	     "	members=[+|-]<val>[,<val>...]		set/add/remove service member hosts/groups\n",
-	     " vxlan service options (add-service, set-service):\n",
-	     "	id=<val>				set VXLAN ID\n",
-	     "	port=<val>				set VXLAN port\n",
-	     "	mtu=<val>				set VXLAN device MTU\n",
-	     "	forward_ports=[+|-]<val>[,<val>...]	set members allowed to receive broadcast/multicast/unknown-unicast\n",
-	     " sign options:\n",
-	     "	upload=<ip>[,<ip>...]			upload signed file to hosts\n",
-	     "\n");
+	warn(usage_message);
 	return 1;
 }
 
@@ -120,7 +130,7 @@ service_field_types = {
 	},
 };
 
-ssh_script = '
+ssh_script = `
 
 set_list() {
 	local field="$1"
@@ -168,7 +178,7 @@ set_interface_attrs
 uci commit
 reload_config
 ifup $INTERFACE
-';
+`;
 
 args = {};
 print_only = false;
@@ -176,17 +186,14 @@ print_only = false;
 function fetch_args() {
 	for (arg in ARGV) {
 		vals = match(arg, /^(.[[:alnum:]_-]*)=(.*)$/);
-		if (!vals) {
-			warn("Invalid argument: ", arg, "\n");
-			exit(1);
-		}
+		assert(vals, `Invalid argument: ${arg}`);
 		args[vals[1]] = vals[2]
 	}
 }
 
 function set_field(typename, object, name, val) {
 	if (!field_types[typename]) {
-		warn("Invalid type ", type, "\n");
+		warn(`Invalid type ${type}\n`);
 		return;
 	}
 
@@ -241,7 +248,7 @@ function sync_ssh_host(host) {
 
 	if (!auth_key) {
 		let fh = fs.mkstemp();
-		system(unet_tool + " -q -P -K " + file + ".key >&" + fh.fileno());
+		system(`${unet_tool} -q -P -K ${file}.key >&${fh.fileno()}`);
 		fh.seek();
 		auth_key = fh.read("line");
 		fh.close();
@@ -253,17 +260,17 @@ function sync_ssh_host(host) {
 	}
 
 	let fh = fs.mkstemp();
-	fh.write("INTERFACE='" + interface + "'\n");
-	fh.write("CONNECT='" + connect + "'\n");
-	fh.write("AUTH_KEY='" + auth_key + "'\n");
-	fh.write("TUNNELS='" + tunnels + "'\n");
-	fh.write("DOMAIN='" + domain + "'\n");
+	fh.write(`INTERFACE='${interface}'\n`);
+	fh.write(`CONNECT='${connect}'\n`);
+	fh.write(`AUTH_KEY='${auth_key}'\n`);
+	fh.write(`TUNNELS='${tunnels}'\n`);
+	fh.write(`DOMAIN='${domain}'\n`);
 	fh.write(ssh_script);
 	fh.flush();
 	fh.seek();
 
 	fh2 = fs.mkstemp();
-	system(sprintf("ssh "+host+" sh <&%d >&%d", fh.fileno(), fh2.fileno()));
+	system(`ssh ${host} sh <&${fh.fileno()} >&${fh2.fileno()}`);
 	fh.close();
 
 	data = {};
@@ -271,18 +278,12 @@ function sync_ssh_host(host) {
 	fh2.seek();
 	while (line = fh2.read("line")) {
 		let vals = match(line, /^(.[[:alnum:]_-]*)=(.*)\n$/);
-		if (!vals) {
-			warn("Invalid argument: ", arg, "\n");
-			exit(1);
-		}
+		assert(vals, `Invalid argument: ${arg}`);
 		data[vals[1]] = vals[2]
 	}
 	fh2.close();
 
-	if (!data.key) {
-		warn("Could not read host key from SSH host\n");
-		exit(1);
-	}
+	assert(data.key, "Could not read host key from SSH host");
 
 	args.key = data.key;
 }
@@ -297,34 +298,24 @@ while (substr(ARGV[0], 0, 1) == "-") {
 		exit(usage());
 }
 
-if (command == "add-host" || command == "set-host" ||
-    command == "add-ssh-host" || command == "set-ssh-host") {
+if (command in [ "add-host", "set-host", "add-ssh-host", "set-ssh-host" ]) {
 	hostname = shift(ARGV);
-	if (!hostname) {
-		warn("Missing host name argument\n");
-		exit(1);
-	}
+	assert(hostname, "Missing host name argument");
 }
 
-if (command == "add-ssh-host" || command == "set-ssh-host") {
+if (command in [ "add-ssh-host", "set-ssh-host" ]) {
 	ssh_host = shift(ARGV);
-	if (!ssh_host) {
-		warn("Missing SSH host/user argument\n");
-		exit(1);
-	}
+	assert(ssh_host, "Missing SSH host/user argument");
 }
 
-if (command == "add-service" || command == "set-service") {
+if (command in [ "add-service", "set-service" ]) {
 	servicename = shift(ARGV);
-	if (!servicename) {
-		warn("Missing service name argument\n");
-		exit(1);
-	}
+	assert(servicename, "Missing service name argument");
 }
 
 fetch_args();
 
-if (command == "add-ssh-host" || command == "set-ssh-host") {
+if (command in [ "add-ssh-host", "set-ssh-host" ]) {
 	sync_ssh_host(ssh_host);
 	command = replace(command, "ssh-", "");
 }
@@ -337,35 +328,32 @@ if (command == "create") {
 	};
 } else {
 	fh = fs.open(file);
-	if (!fh) {
-		warn("Could not open input file ", file, "\n");
-		exit(1);
-	}
+	assert(fh, `Could not open input file ${file}`);
+
 	try {
 		net_data = json(fh);
 	} catch(e) {
-		warn("Could not parse input file ", file, "\n");
-		exit(1);
+		assert(false, `Could not parse input file ${file}`);
 	}
 }
 
 if (command == "create") {
-	for (key in keys(defaults))
-		args[key] ??= "" + defaults[key];
-	if (!fs.access(file + ".key"))
-		system(unet_tool + " -G > " + file + ".key");
+	for (key, val in defaults)
+		args[key] ??= `${val}`;
+	if (!fs.access(`${file}.key`))
+		system(`${unet_tool} -G > ${file}.key`);
 }
 
 if (command == "sign") {
-	ret = system(unet_tool + " -S -K " + file + ".key -o " + file + ".bin " + file);
+	ret = system(`${unet_tool} -S -K ${file}.key -o ${file}.bin ${file}`);
 	if (ret != 0)
 		exit(ret);
 
 	if (args.upload) {
 		hosts = split(args.upload, ",");
 		for (host in hosts) {
-			warn("Uploading " + file + ".bin to " + host + "\n");
-			ret = system(unet_tool + " -U " + host + " -K "+ file + ".key " + file + ".bin");
+			warn(`Uploading ${file}.bin to ${host}\n`);
+			ret = system(`${unet_tool} -U ${host} -K ${file}.key ${file}.bin`);
 			if (ret)
 				warn("Upload failed\n");
 		}
@@ -373,44 +361,43 @@ if (command == "sign") {
 	exit(0);
 }
 
-if (command == "create" || command == "set-config") {
+switch (command) {
+case 'create':
+case 'set-config':
 	set_fields(net_data.config, {
 		port: "int",
 		keepalive: "int",
 	});
 	set_field("int", net_data.config, "peer-exchange-port", args.pex_port);
-} else if (command == "add-host") {
+	break;
+
+case 'add-host':
 	net_data.hosts[hostname] = {};
-	if (!args.key) {
-		warn("Missing host key\n");
-		exit(1);
-	}
+	assert(args.key, "Missing host key");
 	set_host(hostname);
-} else if (command == "set-host") {
-	if (!net_data.hosts[hostname]) {
-		warn("Host '", hostname, "' does not exist\n");
-		exit(1);
-	}
+	break;
+
+case 'set-host':
+	assert(net_data.hosts[hostname], `Host '${hostname}' does not exist`);
 	set_host(hostname);
-} else if (command == "add-service") {
+	break;
+
+case 'add-service':
 	net_data.services[servicename] = {
 		config: {},
 		members: [],
 	};
-	if (!args.type) {
-		warn("Missing service type\n");
-		exit(1);
-	}
+	assert(args.type, "Missing service type");
 	set_service(servicename);
-} else if (command == "set-service") {
-	if (!net_data.services[servicename]) {
-		warn("Service '", servicename, "' does not exist\n");
-		exit(1);
-	}
+	break;
+
+case 'set-service':
+	assert(net_data.services[servicename], `Service '${servicename}' does not exist`);
 	set_service(servicename);
-} else {
-	warn("Unknown command\n");
-	exit(1);
+	break;
+
+default:
+	assert(false, "Unknown command");
 }
 
 net_data_json = sprintf("%.J\n", net_data);
