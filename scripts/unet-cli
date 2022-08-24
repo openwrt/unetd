@@ -166,6 +166,7 @@ check_interface_key
 set_interface_attrs
 uci commit
 reload_config
+ifup $INTERFACE
 ';
 
 args = {};
