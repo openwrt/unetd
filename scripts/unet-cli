@@ -1,6 +1,6 @@
 #!/usr/bin/env ucode
 
-let fs = require("fs");
+import { access, basename, dirname, mkstemp, open, writefile } from 'fs';
 
 function assert(cond, message) {
 	if (!cond) {
@@ -12,9 +12,9 @@ function assert(cond, message) {
 }
 
 let script_dir = sourcepath(0, true);
-if (fs.basename(script_dir) == "scripts") {
-	unet_tool = `${fs.dirname(script_dir)}/unet-tool`;
-	assert(fs.access(unet_tool, "x"), "unet-tool missing");
+if (basename(script_dir) == "scripts") {
+	unet_tool = `${dirname(script_dir)}/unet-tool`;
+	assert(access(unet_tool, "x"), "unet-tool missing");
 } else {
 	unet_tool = "unet-tool";
 }
@@ -28,7 +28,7 @@ defaults = {
 };
 
 const usage_message = `
-Usage: ${fs.basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<value> ...]
+Usage: ${basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<value> ...]
 
      Commands:
       - create:					Create a new network file
@@ -247,7 +247,7 @@ function sync_ssh_host(host) {
 	let domain = args.domain ?? "unet";
 
 	if (!auth_key) {
-		let fh = fs.mkstemp();
+		let fh = mkstemp();
 		system(`${unet_tool} -q -P -K ${file}.key >&${fh.fileno()}`);
 		fh.seek();
 		auth_key = fh.read("line");
@@ -259,7 +259,7 @@ function sync_ssh_host(host) {
 		}
 	}
 
-	let fh = fs.mkstemp();
+	let fh = mkstemp();
 	fh.write(`INTERFACE='${interface}'\n`);
 	fh.write(`CONNECT='${connect}'\n`);
 	fh.write(`AUTH_KEY='${auth_key}'\n`);
@@ -269,7 +269,7 @@ function sync_ssh_host(host) {
 	fh.flush();
 	fh.seek();
 
-	fh2 = fs.mkstemp();
+	fh2 = mkstemp();
 	system(`ssh ${host} sh <&${fh.fileno()} >&${fh2.fileno()}`);
 	fh.close();
 
@@ -327,7 +327,7 @@ if (command == "create") {
 		services: {}
 	};
 } else {
-	fh = fs.open(file);
+	fh = open(file);
 	assert(fh, `Could not open input file ${file}`);
 
 	try {
@@ -340,7 +340,7 @@ if (command == "create") {
 if (command == "create") {
 	for (key, val in defaults)
 		args[key] ??= `${val}`;
-	if (!fs.access(`${file}.key`))
+	if (!access(`${file}.key`))
 		system(`${unet_tool} -G > ${file}.key`);
 }
 
@@ -404,4 +404,4 @@ net_data_json = sprintf("%.J\n", net_data);
 if (print_only)
 	print(net_data_json);
 else
-	fs.writefile(file, net_data_json);
+	writefile(file, net_data_json);
