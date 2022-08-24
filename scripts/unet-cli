@@ -1,5 +1,7 @@
 #!/usr/bin/env ucode
 
+'use strict';
+
 import { access, basename, dirname, mkstemp, open, writefile } from 'fs';
 
 function assert(cond, message) {
@@ -11,17 +13,17 @@ function assert(cond, message) {
 	return true;
 }
 
+let unet_tool = "unet-tool";
 let script_dir = sourcepath(0, true);
+
 if (basename(script_dir) == "scripts") {
 	unet_tool = `${dirname(script_dir)}/unet-tool`;
 	assert(access(unet_tool, "x"), "unet-tool missing");
-} else {
-	unet_tool = "unet-tool";
 }
 
-args = {};
+let args = {};
 
-defaults = {
+const defaults = {
 	port: 51830,
 	pex_port: 51831,
 	keepalive: 10,
@@ -86,10 +88,10 @@ function usage() {
 if (length(ARGV) < 2)
 	exit(usage());
 
-file = shift(ARGV);
-command = shift(ARGV);
+let file = shift(ARGV);
+let command = shift(ARGV);
 
-field_types = {
+const field_types = {
 	int: function(object, name, val) {
 		object[name] = int(val);
 	},
@@ -121,7 +123,7 @@ field_types = {
 	},
 };
 
-service_field_types = {
+const service_field_types = {
 	vxlan: {
 		id: "int",
 		port: "int",
@@ -130,7 +132,7 @@ service_field_types = {
 	},
 };
 
-ssh_script = `
+const ssh_script = `
 
 set_list() {
 	local field="$1"
@@ -180,12 +182,11 @@ reload_config
 ifup $INTERFACE
 `;
 
-args = {};
-print_only = false;
+let print_only = false;
 
 function fetch_args() {
-	for (arg in ARGV) {
-		vals = match(arg, /^(.[[:alnum:]_-]*)=(.*)$/);
+	for (let arg in ARGV) {
+		let vals = match(arg, /^(.[[:alnum:]_-]*)=(.*)$/);
 		assert(vals, `Invalid argument: ${arg}`);
 		args[vals[1]] = vals[2]
 	}
@@ -209,7 +210,7 @@ function set_field(typename, object, name, val) {
 }
 
 function set_fields(object, list) {
-	for (f in list)
+	for (let f in list)
 		set_field(list[f], object, f, args[f]);
 }
 
@@ -265,11 +266,11 @@ function sync_ssh_host(host) {
 	fh.flush();
 	fh.seek();
 
-	fh2 = mkstemp();
+	let fh2 = mkstemp();
 	system(`ssh ${host} sh <&${fh.fileno()} >&${fh2.fileno()}`);
 	fh.close();
 
-	data = {};
+	let data = {}, line;
 
 	fh2.seek();
 	while (line = fh2.read("line")) {
@@ -285,7 +286,7 @@ function sync_ssh_host(host) {
 }
 
 while (substr(ARGV[0], 0, 1) == "-") {
-	opt = shift(ARGV);
+	let opt = shift(ARGV);
 	if (opt == "--")
 		break;
 	else if (opt == "-p")
@@ -293,6 +294,8 @@ while (substr(ARGV[0], 0, 1) == "-") {
 	else
 		exit(usage());
 }
+
+let hostname, ssh_host, servicename;
 
 if (command in [ "add-host", "set-host", "add-ssh-host", "set-ssh-host" ]) {
 	hostname = shift(ARGV);
@@ -316,6 +319,8 @@ if (command in [ "add-ssh-host", "set-ssh-host" ]) {
 	command = replace(command, "ssh-", "");
 }
 
+let net_data;
+
 if (command == "create") {
 	net_data = {
 		config: {},
@@ -323,7 +328,7 @@ if (command == "create") {
 		services: {}
 	};
 } else {
-	fh = open(file);
+	let fh = open(file);
 	assert(fh, `Could not open input file ${file}`);
 
 	try {
@@ -334,20 +339,19 @@ if (command == "create") {
 }
 
 if (command == "create") {
-	for (key, val in defaults)
+	for (let key, val in defaults)
 		args[key] ??= `${val}`;
 	if (!access(`${file}.key`))
 		system(`${unet_tool} -G > ${file}.key`);
 }
 
 if (command == "sign") {
-	ret = system(`${unet_tool} -S -K ${file}.key -o ${file}.bin ${file}`);
+	let ret = system(`${unet_tool} -S -K ${file}.key -o ${file}.bin ${file}`);
 	if (ret != 0)
 		exit(ret);
 
 	if (args.upload) {
-		hosts = split(args.upload, ",");
-		for (host in hosts) {
+		for (let host in split(args.upload, ",")) {
 			warn(`Uploading ${file}.bin to ${host}\n`);
 			ret = system(`${unet_tool} -U ${host} -K ${file}.key ${file}.bin`);
 			if (ret)
@@ -396,7 +400,8 @@ default:
 	assert(false, "Unknown command");
 }
 
-net_data_json = sprintf("%.J\n", net_data);
+const net_data_json = sprintf("%.J\n", net_data);
+
 if (print_only)
 	print(net_data_json);
 else
