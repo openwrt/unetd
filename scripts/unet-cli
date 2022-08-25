@@ -227,9 +227,7 @@ function set_host(name) {
 	});
 }
 
-function set_service(name) {
-	let service = net_data.services[name];
-
+function set_service(service) {
 	set_fields(service, {
 		type: "string",
 		members: "array",
@@ -388,12 +386,12 @@ case 'add-service':
 		members: [],
 	};
 	assert(args.type, "Missing service type");
-	set_service(servicename);
+	set_service(net_data.services[servicename]);
 	break;
 
 case 'set-service':
 	assert(net_data.services[servicename], `Service '${servicename}' does not exist`);
-	set_service(servicename);
+	set_service(net_data.services[servicename]);
 	break;
 
 default:
