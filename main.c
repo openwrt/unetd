@@ -48,7 +48,9 @@ void unetd_write_hosts(void)
 	if (!hosts_file)
 		return;
 
-	asprintf(&tmpfile, "%s.XXXXXXXX", hosts_file);
+	if (asprintf(&tmpfile, "%s.XXXXXXXX", hosts_file) < 0)
+		return;
+
 	fd = mkstemp(tmpfile);
 	if (fd < 0) {
 		perror("mkstemp");

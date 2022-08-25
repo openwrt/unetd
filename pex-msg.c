@@ -77,7 +77,8 @@ struct pex_hdr *__pex_msg_init_ext(const uint8_t *pubkey, const uint8_t *auth_ke
 
 	hdr->len = sizeof(*ehdr);
 
-	fread(&ehdr->nonce, sizeof(ehdr->nonce), 1, pex_urandom);
+	if (fread(&ehdr->nonce, sizeof(ehdr->nonce), 1, pex_urandom) != 1)
+		return NULL;
 
 	hash = pex_network_hash(auth_key, ehdr->nonce);
 	*(uint64_t *)hdr->id ^= hash;
@@ -197,12 +198,16 @@ void pex_msg_update_response_init(struct pex_msg_update_send_ctx *ctx,
 	ctx->ext = ext;
 	ctx->req_id = req->req_id;
 
-	__pex_msg_init_ext(pubkey, auth_key, PEX_MSG_UPDATE_RESPONSE, ext);
+	if (!__pex_msg_init_ext(pubkey, auth_key, PEX_MSG_UPDATE_RESPONSE, ext))
+		return;
+
 	res = pex_msg_append(sizeof(*res));
 	res->req_id = req->req_id;
 	res->data_len = len;
 
-	fread(e_key_priv, sizeof(e_key_priv), 1, pex_urandom);
+	if (!fread(e_key_priv, sizeof(e_key_priv), 1, pex_urandom))
+		return;
+
 	curve25519_clamp_secret(e_key_priv);
 	curve25519_generate_public(res->e_key, e_key_priv);
 	curve25519(enc_key, e_key_priv, peer_key);
@@ -227,8 +232,10 @@ bool pex_msg_update_response_continue(struct pex_msg_update_send_ctx *ctx)
 		return false;
 	}
 
-	__pex_msg_init_ext(ctx->pubkey, ctx->auth_key,
-			   PEX_MSG_UPDATE_RESPONSE_DATA, ctx->ext);
+	if (!__pex_msg_init_ext(ctx->pubkey, ctx->auth_key,
+				PEX_MSG_UPDATE_RESPONSE_DATA, ctx->ext))
+		return false;
+
 	res_ext = pex_msg_append(sizeof(*res_ext));
 	res_ext->req_id = ctx->req_id;
 	res_ext->offset = ctx->cur - ctx->data;
@@ -255,12 +262,17 @@ pex_msg_update_request_init(const uint8_t *pubkey, const uint8_t *priv_key,
 	memcpy(&ctx->addr, addr, sizeof(ctx->addr));
 	memcpy(ctx->auth_key, auth_key, sizeof(ctx->auth_key));
 	memcpy(ctx->priv_key, priv_key, sizeof(ctx->priv_key));
-	fread(&ctx->req_id, sizeof(ctx->req_id), 1, pex_urandom);
+	if (!fread(&ctx->req_id, sizeof(ctx->req_id), 1, pex_urandom))
+		return NULL;
 	list_add_tail(&ctx->list, &requests);
 	if (!gc_timer.pending)
 		uloop_timeout_set(&gc_timer, 1000);
 
-	__pex_msg_init_ext(pubkey, auth_key, PEX_MSG_UPDATE_REQUEST, ext);
+	if (!__pex_msg_init_ext(pubkey, auth_key, PEX_MSG_UPDATE_REQUEST, ext)) {
+		free(ctx);
+		return NULL;
+	}
+
 	req = pex_msg_append(sizeof(*req));
 	req->cur_version = cpu_to_be64(cur_version);
 	req->req_id = ctx->req_id;

@@ -2,6 +2,7 @@
 /*
  * Copyright (C) 2022 Felix Fietkau <nbd@nbd.name>
  */
+#define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -127,7 +128,9 @@ static int network_load_dynamic(struct network *net)
 	FILE *f = NULL;
 	int ret = -1;
 
-	asprintf(&fname, "%s/%s.bin", data_dir, network_name(net));
+	if (asprintf(&fname, "%s/%s.bin", data_dir, network_name(net)) < 0)
+		return -1;
+
 	f = fopen(fname, "r");
 	free(fname);
 
@@ -174,7 +177,9 @@ int network_save_dynamic(struct network *net)
 	    !net->net_data_len)
 		return -1;
 
-	asprintf(&fname, "%s/%s.bin.XXXXXXXX", data_dir, network_name(net));
+	if (asprintf(&fname, "%s/%s.bin.XXXXXXXX", data_dir, network_name(net)) < 0)
+		return -1;
+
 	fd = mkstemp(fname);
 	if (fd < 0)
 		goto error;
