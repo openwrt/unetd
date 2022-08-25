@@ -274,7 +274,7 @@ function sync_ssh_host(host) {
 	fh2.seek();
 	while (line = fh2.read("line")) {
 		let vals = match(line, /^(.[[:alnum:]_-]*)=(.*)\n$/);
-		assert(vals, `Invalid argument: ${arg}`);
+		assert(vals, `Invalid argument: ${line}`);
 		data[vals[1]] = vals[2]
 	}
 	fh2.close();
