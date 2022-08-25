@@ -22,11 +22,15 @@ clone() (
 UNAME="$(uname)"
 set -e -x
 rm -rf install
+mkdir -p install
+ln -s lib install/lib64
 clone libubox git://git.openwrt.org/project/libubox.git
 build libubox -DBUILD_LUA=off
 if [ "$UNAME" = "Linux" ]; then
 	clone libnl-tiny git://git.openwrt.org/project/libnl-tiny.git
 	build libnl-tiny -DBUILD_LUA=off
+	clone libbpf https://github.com/libbpf/libbpf
+	make -j9 -C libbpf/src PREFIX=$PWD/install all install
 fi
 rm -f install/lib/*.{so,dylib}
 if [ "$UNAME" = "Linux" ]; then
