@@ -213,9 +213,7 @@ function set_fields(object, list) {
 		set_field(list[f], object, f, args[f]);
 }
 
-function set_host(name) {
-	let host = net_data.hosts[name];
-
+function set_host(host) {
 	set_fields(host, {
 		key: "string",
 		endpoint: "string",
@@ -372,12 +370,12 @@ case 'set-config':
 case 'add-host':
 	net_data.hosts[hostname] = {};
 	assert(args.key, "Missing host key");
-	set_host(hostname);
+	set_host(net_data.hosts[hostname]);
 	break;
 
 case 'set-host':
 	assert(net_data.hosts[hostname], `Host '${hostname}' does not exist`);
-	set_host(hostname);
+	set_host(net_data.hosts[hostname]);
 	break;
 
 case 'add-service':
