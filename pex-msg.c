@@ -42,8 +42,10 @@ struct pex_msg_update_recv_ctx {
 uint64_t pex_network_hash(const uint8_t *auth_key, uint64_t req_id)
 {
 	siphash_key_t key = {
-		be64_to_cpu(req_id),
-		be64_to_cpu(req_id)
+		.key = {
+			be64_to_cpu(req_id),
+			be64_to_cpu(req_id)
+		}
 	};
 	uint64_t hash;
 
