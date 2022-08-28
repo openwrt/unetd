@@ -25,10 +25,10 @@ rm -rf install
 mkdir -p install
 ln -s lib install/lib64
 clone libubox git://git.openwrt.org/project/libubox.git
-build libubox -DBUILD_LUA=off
+build libubox -DBUILD_LUA=off -DCMAKE_POSITION_INDEPENDENT_CODE=on
 if [ "$UNAME" = "Linux" ]; then
 	clone libnl-tiny git://git.openwrt.org/project/libnl-tiny.git
-	build libnl-tiny -DBUILD_LUA=off
+	build libnl-tiny -DBUILD_LUA=off -DCMAKE_POSITION_INDEPENDENT_CODE=on
 	clone libbpf https://github.com/libbpf/libbpf
 	make -j9 -C libbpf/src PREFIX=$PWD/install all install
 fi
