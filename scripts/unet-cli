@@ -34,49 +34,49 @@ Usage: ${basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<
 
      Commands:
       - create:					Create a new network file
-      - set-config:					Change network config parameters
-      - add-host <name>:				Add a host
-      - add-ssh-host <name> <host>:			Add a remote OpenWrt host via SSH
-     						(<host> can contain SSH options as well)
-      - set-host <name>:				Change host settings
-      - set-ssh-host <name> <host>:			Update local and remote host settings
-      - add-service <name>:				Add a service
-      - set-service <name>:				Change service settings
-      - sign						Sign network data
+      - set-config:				Change network config parameters
+      - add-host <name>:			Add a host
+      - add-ssh-host <name> <host>:		Add a remote OpenWrt host via SSH
+						(<host> can contain SSH options as well)
+      - set-host <name>:			Change host settings
+      - set-ssh-host <name> <host>:		Update local and remote host settings
+      - add-service <name>:			Add a service
+      - set-service <name>:			Change service settings
+      - sign					Sign network data
 
      Flags:
-      -p:						Print modified JSON instead of updating file
+      -p:					Print modified JSON instead of updating file
 
      Options:
       - config options (create, set-config):
-     	port=<val>				set tunnel port (default: ${defaults.port})
-     	pex_port=<val>				set peer-exchange port (default: ${defaults.pex_port})
-     	keepalive=<val>				set keepalive interval (seconds, 0: off, default: ${defaults.keepalive})
-      host options (add-host, add-ssh-host, set-host):
-     	key=<val>				set host public key (required for add-host)
-     	port=<val>				set host tunnel port number
-     	groups=[+|-]<val>[,<val>...]		set/add/remove groups that the host is a member of
-     	ipaddr=[+|-]<val>[,<val>...]		set/add/remove host ip addresses
-     	subnet=[+|-]<val>[,<val>...]		set/add/remove host announced subnets
-     	endpoint=<val>				set host endpoint address
-     	gateway=<name>				set host gateway (using name of other host)
-      ssh host options (add-ssh-host, set-ssh-host)
-     	auth_key=<key>				use <key> as public auth key on the remote host
-     	priv_key=<key>				use <key> as private host key on the remote host (default: generate a new key)
-     	interface=<name>			use <name> as interface in /etc/config/network on the remote host
-     	domain=<name>				use <name> as hosts file domain on the remote host (default: unet)
-     	connect=<val>[,<val>...]		set IP addresses that the host will contact for network updates
-     	tunnels=<ifname>:<service>[,...]	set active tunnel devices
-      service options (add-service, set-service):
-     	type=<val>				set service type (required for add-service)
-     	members=[+|-]<val>[,<val>...]		set/add/remove service member hosts/groups
-      vxlan service options (add-service, set-service):
-     	id=<val>				set VXLAN ID
-     	port=<val>				set VXLAN port
-     	mtu=<val>				set VXLAN device MTU
-     	forward_ports=[+|-]<val>[,<val>...]	set members allowed to receive broadcast/multicast/unknown-unicast
-      sign options:
-     	upload=<ip>[,<ip>...]			upload signed file to hosts
+	port=<val>				set tunnel port (default: ${defaults.port})
+	pex_port=<val>				set peer-exchange port (default: ${defaults.pex_port})
+	keepalive=<val>				set keepalive interval (seconds, 0: off, default: ${defaults.keepalive})
+      - host options (add-host, add-ssh-host, set-host):
+	key=<val>				set host public key (required for add-host)
+	port=<val>				set host tunnel port number
+	groups=[+|-]<val>[,<val>...]		set/add/remove groups that the host is a member of
+	ipaddr=[+|-]<val>[,<val>...]		set/add/remove host ip addresses
+	subnet=[+|-]<val>[,<val>...]		set/add/remove host announced subnets
+	endpoint=<val>				set host endpoint address
+	gateway=<name>				set host gateway (using name of other host)
+     - ssh host options (add-ssh-host, set-ssh-host)
+	auth_key=<key>				use <key> as public auth key on the remote host
+	priv_key=<key>				use <key> as private host key on the remote host (default: generate a new key)
+	interface=<name>			use <name> as interface in /etc/config/network on the remote host
+	domain=<name>				use <name> as hosts file domain on the remote host (default: unet)
+	connect=<val>[,<val>...]		set IP addresses that the host will contact for network updates
+	tunnels=<ifname>:<service>[,...]	set active tunnel devices
+     - service options (add-service, set-service):
+	type=<val>				set service type (required for add-service)
+	members=[+|-]<val>[,<val>...]		set/add/remove service member hosts/groups
+     - vxlan service options (add-service, set-service):
+	id=<val>				set VXLAN ID
+	port=<val>				set VXLAN port
+	mtu=<val>				set VXLAN device MTU
+	forward_ports=[+|-]<val>[,<val>...]	set members allowed to receive broadcast/multicast/unknown-unicast
+     - sign options:
+	upload=<ip>[,<ip>...]			upload signed file to hosts
 
 `;
 
