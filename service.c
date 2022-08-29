@@ -126,7 +126,7 @@ service_add(struct network *net, struct blob_attr *data)
 		s->type = strcpy(type_buf, type);
 	if (config)
 		s->config = memcpy(config_buf, config, blob_pad_len(config));
-#ifdef linux
+#ifdef VXLAN_SUPPORT
 	if (type && !strcmp(type, "vxlan"))
 		s->ops = &vxlan_ops;
 #endif
