@@ -188,23 +188,25 @@ my $json = $ARGV[0];
 my $platform = `uname`;
 my $data = JSON::PP::decode_json($json) or die "Failed to decode JSON data\n";
 
-my $delete = create_state();
-my $add = create_state();
+foreach my $round (1 .. 2) {
+	my $delete = create_state();
+	my $add = create_state();
 
-if ($platform =~ /Darwin/) {
-	fetch_active_data_darwin($data->{ifname}, $delete);
-} elsif ($platform =~ /Linux/) {
-	fetch_active_data_linux($data->{ifname}, $delete);
-} else {
-	die "Unsupported platform $platform\n";
-}
+	if ($platform =~ /Darwin/) {
+		fetch_active_data_darwin($data->{ifname}, $delete);
+	} elsif ($platform =~ /Linux/) {
+		fetch_active_data_linux($data->{ifname}, $delete);
+	} else {
+		die "Unsupported platform $platform\n";
+	}
 
-update_data($data, $delete, $add);
+	update_data($data, $delete, $add);
 
-if ($platform =~ /Darwin/) {
-	set_active_data_darwin($data->{ifname}, $delete, $add);
-} elsif ($platform =~ /Linux/) {
-	set_active_data_linux($data->{ifname}, $delete, $add);
+	if ($platform =~ /Darwin/) {
+		set_active_data_darwin($data->{ifname}, $delete, $add);
+	} elsif ($platform =~ /Linux/) {
+		set_active_data_linux($data->{ifname}, $delete, $add);
+	}
 }
 
 # print Data::Dumper->Dump([$add, $delete], ["add", "delete"])."\n";
