@@ -57,7 +57,7 @@ pex_get_peer_addr(struct sockaddr_in6 *sin6, struct network *net,
 	*sin6 = (struct sockaddr_in6){
 		.sin6_family = AF_INET6,
 		.sin6_addr = peer->local_addr.in6,
-		.sin6_port = htons(net->net_config.pex_port),
+		.sin6_port = htons(peer->pex_port),
 	};
 }
 
@@ -65,7 +65,8 @@ static void pex_msg_send(struct network *net, struct network_peer *peer)
 {
 	struct sockaddr_in6 sin6 = {};
 
-	if (!peer || peer == &net->net_config.local_host->peer)
+	if (!peer || peer == &net->net_config.local_host->peer ||
+	    !peer->pex_port)
 		return;
 
 	pex_get_peer_addr(&sin6, net, peer);
@@ -661,7 +662,7 @@ int network_pex_open(struct network *net)
 
 	network_pex_open_auth_connect(net);
 
-	if (!local_host || !net->net_config.pex_port)
+	if (!local_host || !local_host->peer.pex_port)
 		return 0;
 
 	local = &local_host->peer;
@@ -675,7 +676,7 @@ int network_pex_open(struct network *net)
 	sin6.sin6_family = AF_INET6;
 	memcpy(&sin6.sin6_addr, &local->local_addr.in6,
 	       sizeof(local->local_addr.in6));
-	sin6.sin6_port = htons(net->net_config.pex_port);
+	sin6.sin6_port = htons(local_host->peer.pex_port);
 
 	if (bind(fd, (struct sockaddr *)&sin6, sizeof(sin6)) < 0) {
 		perror("bind");

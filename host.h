@@ -13,6 +13,7 @@ struct network_peer {
 	struct blob_attr *ipaddr;
 	struct blob_attr *subnet;
 	int port;
+	int pex_port;
 
 	struct {
 		int connect_attempt;

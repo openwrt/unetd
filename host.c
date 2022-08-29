@@ -92,6 +92,7 @@ network_host_create(struct network *net, struct blob_attr *attr)
 		NETWORK_HOST_IPADDR,
 		NETWORK_HOST_SUBNET,
 		NETWORK_HOST_PORT,
+		NETWORK_HOST_PEX_PORT,
 		NETWORK_HOST_ENDPOINT,
 		NETWORK_HOST_GATEWAY,
 		__NETWORK_HOST_MAX
@@ -102,6 +103,7 @@ network_host_create(struct network *net, struct blob_attr *attr)
 		[NETWORK_HOST_IPADDR] = { "ipaddr", BLOBMSG_TYPE_ARRAY },
 		[NETWORK_HOST_SUBNET] = { "subnet", BLOBMSG_TYPE_ARRAY },
 		[NETWORK_HOST_PORT] = { "port", BLOBMSG_TYPE_INT32 },
+		[NETWORK_HOST_PEX_PORT] = { "peer-exchange-port", BLOBMSG_TYPE_INT32 },
 		[NETWORK_HOST_ENDPOINT] = { "endpoint", BLOBMSG_TYPE_STRING },
 		[NETWORK_HOST_GATEWAY] = { "gateway", BLOBMSG_TYPE_STRING },
 	};
@@ -164,6 +166,10 @@ network_host_create(struct network *net, struct blob_attr *attr)
 		peer->port = blobmsg_get_u32(cur);
 	else
 		peer->port = net->net_config.port;
+	if ((cur = tb[NETWORK_HOST_PEX_PORT]) != NULL)
+		peer->pex_port = blobmsg_get_u32(cur);
+	else
+		peer->pex_port = net->net_config.pex_port;
 	if (endpoint)
 		peer->endpoint = strcpy(endpoint_buf, endpoint);
 	if (gateway)

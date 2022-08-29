@@ -50,11 +50,12 @@ Usage: ${basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<
      Options:
       - config options (create, set-config):
 	port=<val>				set tunnel port (default: ${defaults.port})
-	pex_port=<val>				set peer-exchange port (default: ${defaults.pex_port})
+	pex_port=<val>				set peer-exchange port (default: ${defaults.pex_port}, 0: disabled)
 	keepalive=<val>				set keepalive interval (seconds, 0: off, default: ${defaults.keepalive})
       - host options (add-host, add-ssh-host, set-host):
 	key=<val>				set host public key (required for add-host)
 	port=<val>				set host tunnel port number
+	pex_port=<val>				set host peer-exchange port (default: network pex_port, 0: disabled)
 	groups=[+|-]<val>[,<val>...]		set/add/remove groups that the host is a member of
 	ipaddr=[+|-]<val>[,<val>...]		set/add/remove host ip addresses
 	subnet=[+|-]<val>[,<val>...]		set/add/remove host announced subnets
@@ -224,6 +225,7 @@ function set_host(host) {
 		subnet: "array",
 		groups: "array",
 	});
+	set_field("int", host, "peer-exchange-port", args.pex_port);
 }
 
 function set_service(service) {
