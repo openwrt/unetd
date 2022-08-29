@@ -129,6 +129,8 @@ sub set_active_data_linux($$$) {
 	my $delete = shift;
 	my $add = shift;
 
+	(keys %{$add->{ipaddr}}, keys %{$add->{route}}) > 0 and cmd("ip l s dev $ifname up");
+
 	foreach my $ip (keys %{$delete->{ipaddr}}) {
 		cmd("ip a d $ip dev $ifname");
 	}
