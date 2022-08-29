@@ -132,12 +132,12 @@ sub set_active_data_linux($$$) {
 	foreach my $ip (keys %{$delete->{ipaddr}}) {
 		cmd("ip a d $ip dev $ifname");
 	}
-	foreach my $ip (keys %{$add->{ipaddr}}) {
-		cmd("ip a a $ip dev $ifname");
-	}
-
 	foreach my $route (keys %{$delete->{route}}) {
 		cmd("ip r d $route dev $ifname");
+	}
+
+	foreach my $ip (keys %{$add->{ipaddr}}) {
+		cmd("ip a a $ip dev $ifname");
 	}
 	foreach my $route (keys %{$add->{route}}) {
 		cmd("ip r a $route dev $ifname");
@@ -157,6 +157,13 @@ sub set_active_data_darwin($$$) {
 			cmd("ifconfig $ifname delete $ip");
 		}
 	}
+	foreach my $route (keys %{$delete->{route}}) {
+		if ($route =~ /:/)  {
+			cmd("route delete -inet6 $route -iface $ifname");
+		} else {
+			cmd("route delete -inet $route -iface $ifname");
+		}
+	}
 	foreach my $ip (keys %{$add->{ipaddr}}) {
 		my @ip = split /\//, $ip;
 
@@ -164,13 +171,6 @@ sub set_active_data_darwin($$$) {
 			cmd("ifconfig $ifname inet6 add $ip[0] prefixlen $ip[1]");
 		} else {
 			cmd("ifconfig $ifname add $ip[0]/$ip[1] $ip[0]");
-		}
-	}
-	foreach my $route (keys %{$delete->{route}}) {
-		if ($route =~ /:/)  {
-			cmd("route delete -inet6 $route -iface $ifname");
-		} else {
-			cmd("route delete -inet $route -iface $ifname");
 		}
 	}
 	foreach my $route (keys %{$add->{route}}) {
