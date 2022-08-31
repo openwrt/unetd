@@ -48,6 +48,79 @@ ubus_network_del(struct ubus_context *ctx, struct ubus_object *obj,
 	return 0;
 }
 
+static void
+__network_dump(struct blob_buf *buf, struct network *net)
+{
+	struct network_host *local = net->net_config.local_host;
+	struct network_peer *peer;
+	void *c, *p;
+	char *str;
+
+	blobmsg_add_field(buf, BLOBMSG_TYPE_TABLE, "config",
+			  blobmsg_data(net->config.data),
+			  blobmsg_len(net->config.data));
+
+	if (local)
+		blobmsg_add_string(buf, "local_host", network_host_name(local));
+
+	c = blobmsg_open_table(buf, "peers");
+	vlist_for_each_element(&net->peers, peer, node) {
+		union network_endpoint *ep = &peer->state.endpoint;
+		void *addr;
+		int len;
+
+		p = blobmsg_open_table(buf, network_peer_name(peer));
+		blobmsg_add_u8(buf, "connected", peer->state.connected);
+		if (peer->state.connected) {
+			str = blobmsg_alloc_string_buffer(buf, "endpoint",
+							  INET6_ADDRSTRLEN + 7);
+			addr = network_endpoint_addr(ep, &len);
+			inet_ntop(ep->sa.sa_family, addr, str, INET6_ADDRSTRLEN);
+			len = strlen(str);
+			snprintf(str + len, INET6_ADDRSTRLEN + 7 - len, ":%d",
+				 ntohs(ep->in.sin_port));
+			blobmsg_add_string_buffer(buf);
+		}
+
+		blobmsg_close_table(buf, p);
+	}
+	blobmsg_close_table(buf, c);
+}
+
+static int
+ubus_network_get(struct ubus_context *ctx, struct ubus_object *obj,
+		 struct ubus_request_data *req, const char *method,
+		 struct blob_attr *msg)
+{
+	struct blob_attr *name;
+	struct network *net;
+	void *c, *n;
+
+	blobmsg_parse(&network_policy[NETWORK_ATTR_NAME], 1, &name,
+		      blobmsg_data(msg), blobmsg_len(msg));
+
+	blob_buf_init(&b, 0);
+	if (name) {
+		net = avl_find_element(&networks, blobmsg_get_string(name), net, node);
+		if (!net)
+			return UBUS_STATUS_NOT_FOUND;
+
+		__network_dump(&b, net);
+	} else {
+		c = blobmsg_open_table(&b, "networks");
+		avl_for_each_element(&networks, net, node) {
+			n = blobmsg_open_table(&b, network_name(net));
+			__network_dump(&b, net);
+			blobmsg_close_table(&b, n);
+		}
+		blobmsg_close_table(&b, c);
+	}
+
+	ubus_send_reply(ctx, req, b.head);
+
+	return 0;
+}
+
 enum {
 	SERVICE_ATTR_NETWORK,
 	SERVICE_ATTR_NAME,
@@ -125,6 +198,8 @@ ubus_service_get(struct ubus_context *ctx, struct ubus_object *obj,
 static const struct ubus_method unetd_methods[] = {
 	UBUS_METHOD("network_add", ubus_network_add, network_policy),
 	UBUS_METHOD_MASK("network_del", ubus_network_del, network_policy,
+			 (1 << NETWORK_ATTR_NAME)),
+	UBUS_METHOD_MASK("network_get", ubus_network_get, network_policy,
 			 (1 << NETWORK_ATTR_NAME)),
 	UBUS_METHOD("service_get", ubus_service_get, service_policy),
 };
