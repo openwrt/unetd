@@ -195,12 +195,69 @@ ubus_service_get(struct ubus_context *ctx, struct ubus_object *obj,
 	return 0;
 }
 
+enum {
+    CONNECT_ATTR_NAME,
+    CONNECT_ATTR_ADDRESS,
+    CONNECT_ATTR_TIMEOUT,
+    __CONNECT_ATTR_MAX
+};
+
+static const struct blobmsg_policy connect_policy[__CONNECT_ATTR_MAX] = {
+	[CONNECT_ATTR_NAME] = { "name", BLOBMSG_TYPE_STRING },
+	[CONNECT_ATTR_ADDRESS] = { "address", BLOBMSG_TYPE_STRING },
+	[CONNECT_ATTR_TIMEOUT] = { "timeout", BLOBMSG_TYPE_INT32 },
+};
+
+static int
+ubus_network_connect(struct ubus_context *ctx, struct ubus_object *obj,
+		     struct ubus_request_data *req, const char *method,
+		     struct blob_attr *msg)
+{
+	struct blob_attr *tb[__CONNECT_ATTR_MAX];
+	union network_endpoint ep = {};
+	struct blob_attr *cur;
+	struct network *net;
+	unsigned int timeout;
+	const char *name;
+
+	blobmsg_parse(connect_policy, __CONNECT_ATTR_MAX, tb,
+		      blobmsg_data(msg), blobmsg_len(msg));
+
+	if ((cur = tb[CONNECT_ATTR_NAME]) != NULL)
+		name = blobmsg_get_string(cur);
+	else
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	if ((cur = tb[CONNECT_ATTR_TIMEOUT]) != NULL)
+		timeout = blobmsg_get_u32(cur);
+	else
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	if ((cur = tb[CONNECT_ATTR_ADDRESS]) == NULL ||
+	    network_get_endpoint(&ep, blobmsg_get_string(cur), UNETD_GLOBAL_PEX_PORT, 0) < 0 ||
+	    !ep.in.sin_port)
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	net = avl_find_element(&networks, name, net, node);
+	if (!net)
+		return UBUS_STATUS_NOT_FOUND;
+
+	if (net->config.type != NETWORK_TYPE_DYNAMIC)
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	network_pex_create_host(net, &ep, timeout);
+
+	return 0;
+}
+
+
 static const struct ubus_method unetd_methods[] = {
 	UBUS_METHOD("network_add", ubus_network_add, network_policy),
 	UBUS_METHOD_MASK("network_del", ubus_network_del, network_policy,
 			 (1 << NETWORK_ATTR_NAME)),
 	UBUS_METHOD_MASK("network_get", ubus_network_get, network_policy,
 			 (1 << NETWORK_ATTR_NAME)),
+	UBUS_METHOD("network_connect", ubus_network_connect, connect_policy),
 	UBUS_METHOD("service_get", ubus_service_get, service_policy),
 };
 

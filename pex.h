@@ -11,6 +11,7 @@ struct network;
 
 struct network_pex_host {
 	struct list_head list;
+	uint64_t timeout;
 	union network_endpoint endpoint;
 };
 
@@ -30,9 +31,12 @@ enum pex_event {
 void network_pex_init(struct network *net);
 int network_pex_open(struct network *net);
 void network_pex_close(struct network *net);
+void network_pex_free(struct network *net);
 
 void network_pex_event(struct network *net, struct network_peer *peer,
 		       enum pex_event ev);
+void network_pex_create_host(struct network *net, union network_endpoint *ep,
+			     unsigned int timeout);
 
 static inline bool network_pex_active(struct network_pex *pex)
 {

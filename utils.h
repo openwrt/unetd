@@ -123,4 +123,6 @@ static inline uint64_t get_unaligned_le64(const uint8_t *p)
 int rtnl_init(void);
 int rtnl_call(struct nl_msg *msg);
 
+uint64_t unet_gettime(void);
+
 #endif

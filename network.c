@@ -445,6 +445,7 @@ static void network_teardown(struct network *net)
 	uloop_timeout_cancel(&net->reload_timer);
 	network_do_update(net, false);
 	network_pex_close(net);
+	network_pex_free(net);
 	network_hosts_free(net);
 	network_services_free(net);
 	wg_cleanup_network(net);

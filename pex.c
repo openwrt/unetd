@@ -261,10 +261,17 @@ network_pex_request_update_cb(struct uloop_timeout *t)
 
 	uloop_timeout_set(t, 5000);
 
+retry:
 	if (list_empty(&pex->hosts))
 		return;
 
 	host = list_first_entry(&pex->hosts, struct network_pex_host, list);
+	if (host->timeout && host->timeout < unet_gettime()) {
+		list_del(&host->list);
+		free(host);
+		goto retry;
+	}
+
 	list_move_tail(&host->list, &pex->hosts);
 	network_pex_host_request_update(net, host);
 }
@@ -667,15 +674,29 @@ network_pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 	}
 }
 
-static void
-network_pex_create_host(struct network *net, union network_endpoint *ep)
+void network_pex_create_host(struct network *net, union network_endpoint *ep,
+			     unsigned int timeout)
 {
 	struct network_pex *pex = &net->pex;
 	struct network_pex_host *host;
+	bool new_host = false;
+
+	list_for_each_entry(host, &pex->hosts, list) {
+		if (memcmp(&host->endpoint, ep, sizeof(host->endpoint)) != 0)
+			continue;
+
+		list_move_tail(&host->list, &pex->hosts);
+		goto out;
+	}
 
 	host = calloc(1, sizeof(*host));
+	new_host = true;
 	memcpy(&host->endpoint, ep, sizeof(host->endpoint));
 	list_add_tail(&host->list, &pex->hosts);
+
+out:
+	if (timeout && (new_host || host->timeout))
+		host->timeout = timeout + unet_gettime();
 	network_pex_host_request_update(net, host);
 }
 
@@ -703,7 +724,7 @@ network_pex_open_auth_connect(struct network *net)
 			continue;
 
 		ep.in.sin_port = htons(UNETD_GLOBAL_PEX_PORT);
-		network_pex_create_host(net, &ep);
+		network_pex_create_host(net, &ep, 0);
 	}
 
 	if (!net->config.auth_connect)
@@ -716,7 +737,7 @@ network_pex_open_auth_connect(struct network *net)
 					 UNETD_GLOBAL_PEX_PORT, 0) < 0)
 			continue;
 
-		network_pex_create_host(net, &ep);
+		network_pex_create_host(net, &ep, 0);
 	}
 }
 
@@ -778,6 +799,9 @@ void network_pex_close(struct network *net)
 
 	uloop_timeout_cancel(&pex->request_update_timer);
 	list_for_each_entry_safe(host, tmp, &pex->hosts, list) {
+		if (host->timeout)
+			continue;
+
 		list_del(&host->list);
 		free(host);
 	}
@@ -788,6 +812,17 @@ void network_pex_close(struct network *net)
 	uloop_fd_delete(&pex->fd);
 	close(pex->fd.fd);
 	network_pex_init(net);
+}
+
+void network_pex_free(struct network *net)
+{
+	struct network_pex *pex = &net->pex;
+	struct network_pex_host *host, *tmp;
+
+	list_for_each_entry_safe(host, tmp, &pex->hosts, list) {
+		list_del(&host->list);
+		free(host);
+	}
 }
 
 static struct network *

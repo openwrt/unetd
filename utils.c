@@ -8,6 +8,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <stdio.h>
+
+#include <libubox/utils.h>
+
 #include "unetd.h"
 
 int network_get_endpoint(union network_endpoint *dest, const char *str,
@@ -178,4 +181,13 @@ close:
 error:
 	*len = 0;
 	return NULL;
+}
+
+uint64_t unet_gettime(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+
+	return ts.tv_sec;
 }
