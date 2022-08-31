@@ -158,7 +158,7 @@ pex_handle_update_request(struct sockaddr_in6 *addr, const uint8_t *id, void *da
 	pex_msg_update_response_init(&ctx, empty_key, pubkey,
 				     peerpubkey, true, data, net_data, net_data_len);
 	while (!done) {
-		__pex_msg_send(-1, NULL);
+		__pex_msg_send(-1, NULL, NULL, 0);
 		done = !pex_msg_update_response_continue(&ctx);
 	}
 	sync_done = true;
@@ -287,7 +287,7 @@ static int cmd_sync(const char *endpoint, int argc, char **argv)
 		return 1;
 
 	req_id = req->req_id;
-	if (__pex_msg_send(-1, NULL) < 0) {
+	if (__pex_msg_send(-1, NULL, NULL, 0) < 0) {
 		if (!quiet)
 			perror("send");
 		return 1;

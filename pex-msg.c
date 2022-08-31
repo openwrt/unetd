@@ -9,6 +9,10 @@
 #include <fcntl.h>
 #include <libubox/list.h>
 #include <libubox/uloop.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
+#include <netinet/udp.h>
 #include "pex-msg.h"
 #include "chacha20.h"
 #include "auth-data.h"
@@ -18,6 +22,7 @@ static FILE *pex_urandom;
 static struct uloop_fd pex_fd;
 static LIST_HEAD(requests);
 static struct uloop_timeout gc_timer;
+static int pex_raw_v4_fd = -1, pex_raw_v6_fd = -1;
 
 static pex_recv_cb_t pex_recv_cb;
 
@@ -141,27 +146,160 @@ pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 	}
 }
 
-int __pex_msg_send(int fd, const void *addr)
+static inline uint32_t
+csum_tcpudp_nofold(uint32_t saddr, uint32_t daddr, uint32_t len, uint8_t proto)
+{
+	uint64_t sum = 0;
+
+	sum += saddr;
+	sum += daddr;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	sum += (proto + len) << 8;
+#else
+	sum += proto + len;
+#endif
+
+	sum = (sum & 0xffffffff) + (sum >> 32);
+	sum = (sum & 0xffffffff) + (sum >> 32);
+
+	return (uint32_t)sum;
+}
+
+static inline uint32_t csum_add(uint32_t sum, uint32_t addend)
+{
+	sum += addend;
+	return sum + (sum < addend);
+}
+
+static inline uint16_t csum_fold(uint32_t sum)
+{
+	sum = (sum & 0xffff) + (sum >> 16);
+	sum = (sum & 0xffff) + (sum >> 16);
+
+	return (uint16_t)~sum;
+}
+
+static uint32_t csum_partial(const void *buf, int len)
+{
+	const uint16_t *data = buf;
+	uint32_t sum = 0;
+
+	while (len > 1) {
+		sum += *data++;
+		len -= 2;
+	}
+
+	if (len == 1)
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+		sum += *(uint8_t *)data;
+#else
+		sum += *(uint8_t *)data << 8;
+#endif
+
+	sum = (sum & 0xffff) + (sum >> 16);
+	sum = (sum & 0xffff) + (sum >> 16);
+
+	return sum;
+}
+
+static void pex_fixup_udpv4(void *hdr, size_t hdrlen, const void *data, size_t len)
+{
+	struct ip *ip = hdr;
+	struct udphdr *udp = hdr + ip->ip_hl * 4;
+	uint16_t udp_len = sizeof(*udp) + len;
+	uint32_t sum;
+
+	if ((void *)&udp[1] > hdr + hdrlen)
+		return;
+
+	udp->uh_sum = 0;
+	udp->uh_ulen = htons(udp_len);
+	sum = csum_tcpudp_nofold(*(uint32_t *)&ip->ip_src, *(uint32_t *)&ip->ip_dst,
+				 ip->ip_p, udp_len);
+	sum = csum_add(sum, csum_partial(udp, sizeof(*udp)));
+	sum = csum_add(sum, csum_partial(data, len));
+	udp->uh_sum = csum_fold(sum);
+
+	ip->ip_len = htons(hdrlen + len);
+	ip->ip_sum = 0;
+	ip->ip_sum = csum_fold(csum_partial(ip, sizeof(*ip)));
+
+#ifdef __APPLE__
+	ip->ip_len = hdrlen + len;
+#endif
+}
+
+static void pex_fixup_udpv6(void *hdr, size_t hdrlen, const void *data, size_t len)
+{
+	struct ip6_hdr *ip = hdr;
+	struct udphdr *udp = hdr + sizeof(*ip);
+	uint16_t udp_len = htons(sizeof(*udp) + len);
+
+	if ((void *)&udp[1] > hdr + hdrlen)
+		return;
+
+	ip->ip6_plen = htons(sizeof(*udp) + len);
+	udp->uh_sum = 0;
+	udp->uh_ulen = udp_len;
+	udp->uh_sum = csum_fold(csum_partial(hdr, sizeof(*ip) + sizeof(*udp)));
+
+#ifdef __APPLE__
+	ip->ip6_plen = sizeof(*udp) + len;
+#endif
+}
+
+static void pex_fixup_header(void *hdr, size_t hdrlen, const void *data, size_t len)
+{
+	if (hdrlen >= sizeof(struct ip6_hdr) + sizeof(struct udphdr))
+		pex_fixup_udpv6(hdr, hdrlen, data, len);
+	else if (hdrlen >= sizeof(struct ip) + sizeof(struct udphdr))
+		pex_fixup_udpv4(hdr, hdrlen, data, len);
+}
+
+int __pex_msg_send(int fd, const void *addr, void *ip_hdr, size_t ip_hdrlen)
 {
 	struct pex_hdr *hdr = (struct pex_hdr *)pex_tx_buf;
 	const struct sockaddr *sa = addr;
 	size_t tx_len = sizeof(*hdr) + hdr->len;
 	uint16_t orig_len = hdr->len;
-	size_t addr_len;
 	int ret;
 
 	if (fd < 0) {
 		hdr->len -= sizeof(struct pex_ext_hdr);
-		fd = pex_fd.fd;
+		if (ip_hdrlen)
+			fd = sa->sa_family == AF_INET6 ? pex_raw_v6_fd : pex_raw_v4_fd;
+		else
+			fd = pex_fd.fd;
+
+		if (fd < 0)
+			return -1;
 	}
 
 	hdr->len = htons(hdr->len);
 	if (addr) {
+		struct iovec iov[2] = {
+			{ .iov_base = (void *)ip_hdr, .iov_len = ip_hdrlen },
+			{ .iov_base = pex_tx_buf, .iov_len = tx_len }
+		};
+		struct msghdr msg = {
+			.msg_name = (void *)addr,
+			.msg_iov = iov,
+			.msg_iovlen = ARRAY_SIZE(iov),
+		};
+
 		if (sa->sa_family == AF_INET6)
-			addr_len = sizeof(struct sockaddr_in6);
+			msg.msg_namelen = sizeof(struct sockaddr_in6);
 		else
-			addr_len = sizeof(struct sockaddr_in);
-		ret = sendto(fd, pex_tx_buf, tx_len, 0, sa, addr_len);
+			msg.msg_namelen = sizeof(struct sockaddr_in);
+
+		if (ip_hdrlen) {
+			pex_fixup_header(ip_hdr, ip_hdrlen, pex_tx_buf, tx_len);
+		} else {
+			msg.msg_iov++;
+			msg.msg_iovlen--;
+		}
+
+		ret = sendmsg(fd, &msg, 0);
 	} else {
 		ret = send(fd, pex_tx_buf, tx_len, 0);
 	}
@@ -406,9 +544,28 @@ int pex_open(void *addr, size_t addr_len, pex_recv_cb_t cb, bool server)
 
 	pex_recv_cb = cb;
 
+	if (server) {
+		pex_raw_v4_fd = fd = socket(PF_INET, SOCK_RAW, IPPROTO_UDP);
+		if (fd < 0)
+			return -1;
+
+		setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
+		setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &yes, sizeof(yes));
+
+#ifdef linux
+		pex_raw_v6_fd = fd = socket(PF_INET6, SOCK_RAW, IPPROTO_UDP);
+		if (fd < 0)
+			goto close_raw;
+
+		setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
+		setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
+		setsockopt(fd, IPPROTO_IPV6, IPV6_HDRINCL, &yes, sizeof(yes));
+#endif
+	}
+
 	pex_urandom = fopen("/dev/urandom", "r");
 	if (!pex_urandom)
-		return -1;
+		goto close_raw;
 
 	fd = socket(sa->sa_family == AF_INET ? PF_INET : PF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	if (fd < 0)
@@ -445,6 +602,13 @@ close_socket:
 	close(fd);
 close_urandom:
 	fclose(pex_urandom);
+close_raw:
+	if (pex_raw_v4_fd >= 0)
+		close(pex_raw_v4_fd);
+	if (pex_raw_v6_fd >= 0)
+		close(pex_raw_v6_fd);
+	pex_raw_v4_fd = -1;
+	pex_raw_v6_fd = -1;
 	return -1;
 }
 
@@ -452,6 +616,13 @@ void pex_close(void)
 {
 	if (!pex_fd.cb)
 		return;
+
+	if (pex_raw_v4_fd >= 0)
+		close(pex_raw_v4_fd);
+	if (pex_raw_v6_fd >= 0)
+		close(pex_raw_v6_fd);
+	pex_raw_v4_fd = -1;
+	pex_raw_v6_fd = -1;
 
 	fclose(pex_urandom);
 	uloop_fd_delete(&pex_fd);
