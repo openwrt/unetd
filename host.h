@@ -106,6 +106,7 @@ network_host_uses_peer_route(struct network_host *host, struct network *net,
 void network_hosts_update_start(struct network *net);
 void network_hosts_update_done(struct network *net);
 void network_hosts_add(struct network *net, struct blob_attr *hosts);
+void network_hosts_reload_dynamic_peers(struct network *net);
 
 void network_hosts_init(struct network *net);
 void network_hosts_free(struct network *net);

@@ -250,6 +250,19 @@ ubus_network_connect(struct ubus_context *ctx, struct ubus_object *obj,
 	return 0;
 }
 
+static int
+ubus_reload(struct ubus_context *ctx, struct ubus_object *obj,
+	    struct ubus_request_data *req, const char *method,
+	    struct blob_attr *msg)
+{
+	struct network *net;
+
+	avl_for_each_element(&networks, net, node)
+		network_soft_reload(net);
+
+	return 0;
+}
+
 
 static const struct ubus_method unetd_methods[] = {
 	UBUS_METHOD("network_add", ubus_network_add, network_policy),
@@ -258,6 +271,7 @@ static const struct ubus_method unetd_methods[] = {
 	UBUS_METHOD_MASK("network_get", ubus_network_get, network_policy,
 			 (1 << NETWORK_ATTR_NAME)),
 	UBUS_METHOD("network_connect", ubus_network_connect, connect_policy),
+	UBUS_METHOD_NOARG("reload", ubus_reload),
 	UBUS_METHOD("service_get", ubus_service_get, service_policy),
 };
 

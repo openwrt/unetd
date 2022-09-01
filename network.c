@@ -100,7 +100,9 @@ static void network_load_config_data(struct network *net, struct blob_attr *data
 static int network_load_data(struct network *net, struct blob_attr *data)
 {
 	struct blob_attr *tb[__NETDATA_ATTR_MAX];
+	siphash_key_t key = {};
 
+	net->net_config.hash = siphash(data, blob_raw_len(data), &key);
 	blobmsg_parse(netdata_policy, __NETDATA_ATTR_MAX, tb,
 		      blobmsg_data(data), blobmsg_len(data));
 
@@ -422,6 +424,27 @@ static void network_reload(struct uloop_timeout *t)
 	unetd_write_hosts();
 	network_do_update(net, true);
 	network_pex_open(net);
+}
+
+void network_soft_reload(struct network *net)
+{
+	siphash_key_t key = {};
+	uint64_t hash;
+
+	if (net->config.type == NETWORK_TYPE_FILE) {
+		blob_buf_init(&b, 0);
+
+		if (!blobmsg_add_json_from_file(&b, net->config.file))
+			return;
+
+		hash = siphash(b.head, blob_raw_len(b.head), &key);
+		if (hash != net->net_config.hash) {
+			uloop_timeout_set(&net->reload_timer, 1);
+			return;
+		}
+	}
+
+	network_hosts_reload_dynamic_peers(net);
 }
 
 static int network_setup(struct network *net)

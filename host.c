@@ -246,8 +246,9 @@ network_hosts_load_dynamic_file(struct network *net, const char *file)
 }
 
 static void
-network_hosts_load_dynamic(struct network *net)
+network_hosts_load_dynamic_peers(struct network *net)
 {
+	struct network_dynamic_peer *dyn;
 	struct blob_attr *cur;
 	int rem;
 
@@ -258,6 +259,41 @@ network_hosts_load_dynamic(struct network *net)
 		network_hosts_load_dynamic_file(net, blobmsg_get_string(cur));
 
 	blob_buf_free(&b);
+
+	list_for_each_entry(dyn, &net->dynamic_peers, list)
+		vlist_add(&net->peers, &dyn->peer.node, &dyn->peer.key);
+}
+
+static void
+network_host_free_dynamic_peers(struct list_head *list)
+{
+	struct network_dynamic_peer *dyn, *dyn_tmp;
+
+	list_for_each_entry_safe(dyn, dyn_tmp, list, list) {
+		list_del(&dyn->list);
+		free(dyn);
+	}
+}
+
+void network_hosts_reload_dynamic_peers(struct network *net)
+{
+	struct network_peer *peer;
+	LIST_HEAD(old_entries);
+
+	if (!net->config.peer_data)
+		return;
+
+	list_splice_init(&net->dynamic_peers, &old_entries);
+
+	vlist_for_each_element(&net->peers, peer, node)
+		if (peer->dynamic)
+			peer->node.version = net->peers.version - 1;
+
+	network_hosts_load_dynamic_peers(net);
+
+	vlist_flush(&net->peers);
+
+	network_host_free_dynamic_peers(&old_entries);
 }
 
 void network_hosts_update_start(struct network *net)
@@ -280,7 +316,6 @@ static void
 __network_hosts_update_done(struct network *net, bool free_net)
 {
 	struct network_host *local, *host, *tmp;
-	struct network_dynamic_peer *dyn, *dyn_tmp;
 	LIST_HEAD(old_dynamic);
 	const char *local_name;
 
@@ -307,18 +342,12 @@ __network_hosts_update_done(struct network *net, bool free_net)
 		vlist_add(&net->peers, &host->peer.node, host->peer.key);
 	}
 
-	network_hosts_load_dynamic(net);
-
-	list_for_each_entry(dyn, &net->dynamic_peers, list)
-		vlist_add(&net->peers, &dyn->peer.node, &dyn->peer.key);
+	network_hosts_load_dynamic_peers(net);
 
 out:
 	vlist_flush(&net->peers);
 
-	list_for_each_entry_safe(dyn, dyn_tmp, &old_dynamic, list) {
-		list_del(&dyn->list);
-		free(dyn);
-	}
+	network_host_free_dynamic_peers(&old_dynamic);
 
 	list_for_each_entry_safe(host, tmp, &old_hosts, node.list) {
 		list_del(&host->node.list);

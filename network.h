@@ -42,6 +42,7 @@ struct network {
 	} config;
 
 	struct {
+		uint64_t hash;
 		union network_addr addr;
 		struct network_host *local_host;
 		unsigned int keepalive;
@@ -99,6 +100,7 @@ static inline const char *network_name(struct network *net)
 
 void network_fill_host_addr(union network_addr *addr, uint8_t *key);
 int network_save_dynamic(struct network *net);
+void network_soft_reload(struct network *net);
 void network_free_all(void);
 
 int unetd_network_add(const char *name, struct blob_attr *config);
