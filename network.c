@@ -55,6 +55,7 @@ const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 	[NETWORK_ATTR_UPDATE_CMD] = { "update-cmd", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_TUNNELS] = { "tunnels", BLOBMSG_TYPE_TABLE },
 	[NETWORK_ATTR_AUTH_CONNECT] = { "auth_connect", BLOBMSG_TYPE_ARRAY },
+	[NETWORK_ATTR_PEER_DATA] = { "peer_data", BLOBMSG_TYPE_ARRAY },
 };
 
 AVL_TREE(networks, avl_strcmp, false, NULL);
@@ -536,6 +537,10 @@ network_set_config(struct network *net, struct blob_attr *config)
 	if ((cur = tb[NETWORK_ATTR_AUTH_CONNECT]) != NULL &&
 	    blobmsg_check_array(cur, BLOBMSG_TYPE_STRING) > 0)
 		net->config.auth_connect = cur;
+
+	if ((cur = tb[NETWORK_ATTR_PEER_DATA]) != NULL &&
+	    blobmsg_check_array(cur, BLOBMSG_TYPE_STRING) > 0)
+		net->config.peer_data = cur;
 
 	if ((cur = tb[NETWORK_ATTR_KEY]) == NULL)
 		goto invalid;

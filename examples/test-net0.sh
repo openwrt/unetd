@@ -15,5 +15,6 @@ ip link add dev $ifname type wireguard > /dev/null 2>&1
 	"tunnels": {
 		"vx0": "l2-tunnel"
 	},
+	"peer_data": [ "'"$PWD/net0.peers"'" ],
 	"update-cmd": "'"$PWD/../scripts/update-cmd.pl"'"
 }'

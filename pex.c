@@ -578,7 +578,7 @@ network_pex_recv_update_response(struct network *net, const uint8_t *data, size_
 
 	uloop_timeout_set(&net->reload_timer, no_prev_data ? 1 : UNETD_DATA_UPDATE_DELAY);
 	vlist_for_each_element(&net->peers, peer, node) {
-		if (!peer->state.connected)
+		if (!peer->state.connected || !peer->pex_port)
 			continue;
 		network_pex_send_update_request(net, peer, NULL);
 	}
@@ -716,7 +716,7 @@ network_pex_open_auth_connect(struct network *net)
 	vlist_for_each_element(&net->peers, peer, node) {
 		union network_endpoint ep = {};
 
-		if (!peer->endpoint)
+		if (!peer->endpoint || peer->dynamic)
 			continue;
 
 		if (network_get_endpoint(&ep, peer->endpoint,

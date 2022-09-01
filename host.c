@@ -3,9 +3,11 @@
  * Copyright (C) 2022 Felix Fietkau <nbd@nbd.name>
  */
 #include <libubox/avl-cmp.h>
+#include <libubox/blobmsg_json.h>
 #include "unetd.h"
 
 static LIST_HEAD(old_hosts);
+static struct blob_buf b;
 
 static int avl_key_cmp(const void *k1, const void *k2, void *ptr)
 {
@@ -83,41 +85,43 @@ network_host_add_group(struct network *net, struct network_host *host,
 	group->members[group->n_members - 1] = host;
 }
 
+enum {
+	NETWORK_HOST_KEY,
+	NETWORK_HOST_GROUPS,
+	NETWORK_HOST_IPADDR,
+	NETWORK_HOST_SUBNET,
+	NETWORK_HOST_PORT,
+	NETWORK_HOST_PEX_PORT,
+	NETWORK_HOST_ENDPOINT,
+	NETWORK_HOST_GATEWAY,
+	__NETWORK_HOST_MAX
+};
+
+static const struct blobmsg_policy host_policy[__NETWORK_HOST_MAX] = {
+	[NETWORK_HOST_KEY] = { "key", BLOBMSG_TYPE_STRING },
+	[NETWORK_HOST_GROUPS] = { "groups", BLOBMSG_TYPE_ARRAY },
+	[NETWORK_HOST_IPADDR] = { "ipaddr", BLOBMSG_TYPE_ARRAY },
+	[NETWORK_HOST_SUBNET] = { "subnet", BLOBMSG_TYPE_ARRAY },
+	[NETWORK_HOST_PORT] = { "port", BLOBMSG_TYPE_INT32 },
+	[NETWORK_HOST_PEX_PORT] = { "peer-exchange-port", BLOBMSG_TYPE_INT32 },
+	[NETWORK_HOST_ENDPOINT] = { "endpoint", BLOBMSG_TYPE_STRING },
+	[NETWORK_HOST_GATEWAY] = { "gateway", BLOBMSG_TYPE_STRING },
+};
+
 static void
-network_host_create(struct network *net, struct blob_attr *attr)
+network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 {
-	enum {
-		NETWORK_HOST_KEY,
-		NETWORK_HOST_GROUPS,
-		NETWORK_HOST_IPADDR,
-		NETWORK_HOST_SUBNET,
-		NETWORK_HOST_PORT,
-		NETWORK_HOST_PEX_PORT,
-		NETWORK_HOST_ENDPOINT,
-		NETWORK_HOST_GATEWAY,
-		__NETWORK_HOST_MAX
-	};
-	static const struct blobmsg_policy policy[__NETWORK_HOST_MAX] = {
-		[NETWORK_HOST_KEY] = { "key", BLOBMSG_TYPE_STRING },
-		[NETWORK_HOST_GROUPS] = { "groups", BLOBMSG_TYPE_ARRAY },
-		[NETWORK_HOST_IPADDR] = { "ipaddr", BLOBMSG_TYPE_ARRAY },
-		[NETWORK_HOST_SUBNET] = { "subnet", BLOBMSG_TYPE_ARRAY },
-		[NETWORK_HOST_PORT] = { "port", BLOBMSG_TYPE_INT32 },
-		[NETWORK_HOST_PEX_PORT] = { "peer-exchange-port", BLOBMSG_TYPE_INT32 },
-		[NETWORK_HOST_ENDPOINT] = { "endpoint", BLOBMSG_TYPE_STRING },
-		[NETWORK_HOST_GATEWAY] = { "gateway", BLOBMSG_TYPE_STRING },
-	};
 	struct blob_attr *tb[__NETWORK_HOST_MAX];
 	struct blob_attr *cur, *ipaddr, *subnet;
 	uint8_t key[CURVE25519_KEY_SIZE];
-	struct network_host *host;
+	struct network_host *host = NULL;
 	struct network_peer *peer;
 	int ipaddr_len, subnet_len;
-	const char *name, *endpoint, *gateway;
-	char *name_buf, *endpoint_buf, *gateway_buf;
+	const char *endpoint, *gateway;
+	char *endpoint_buf, *gateway_buf;
 	int rem;
 
-	blobmsg_parse(policy, __NETWORK_HOST_MAX, tb, blobmsg_data(attr), blobmsg_len(attr));
+	blobmsg_parse(host_policy, __NETWORK_HOST_MAX, tb, blobmsg_data(attr), blobmsg_len(attr));
 
 	if (!tb[NETWORK_HOST_KEY])
 		return;
@@ -137,7 +141,7 @@ network_host_create(struct network *net, struct blob_attr *attr)
 	else
 		endpoint = NULL;
 
-	if ((cur = tb[NETWORK_HOST_GATEWAY]) != NULL)
+	if (!dynamic && (cur = tb[NETWORK_HOST_GATEWAY]) != NULL)
 		gateway = blobmsg_get_string(cur);
 	else
 		gateway = NULL;
@@ -146,18 +150,41 @@ network_host_create(struct network *net, struct blob_attr *attr)
 		       sizeof(key)) != sizeof(key))
 		return;
 
-	name = blobmsg_name(attr);
-	host = avl_find_element(&net->hosts, name, host, node);
-	if (host)
-		return;
+	if (dynamic) {
+		struct network_dynamic_peer *dyn_peer;
 
-	host = calloc_a(sizeof(*host),
-			&name_buf, strlen(name) + 1,
-			&ipaddr, ipaddr_len,
-			&subnet, subnet_len,
-			&endpoint_buf, endpoint ? strlen(endpoint) + 1 : 0,
-			&gateway_buf, gateway ? strlen(endpoint) + 1 : 0);
-	peer = &host->peer;
+		/* don't override/alter hosts configured via network data */
+		peer = vlist_find(&net->peers, key, peer, node);
+		if (peer && !peer->dynamic &&
+			peer->node.version == net->peers.version)
+			return;
+
+		dyn_peer = calloc_a(sizeof(*dyn_peer),
+				&ipaddr, ipaddr_len,
+				&subnet, subnet_len,
+				&endpoint_buf, endpoint ? strlen(endpoint) + 1 : 0);
+		list_add_tail(&dyn_peer->list, &net->dynamic_peers);
+		peer = &dyn_peer->peer;
+	} else {
+		const char *name;
+		char *name_buf;
+
+		name = blobmsg_name(attr);
+		host = avl_find_element(&net->hosts, name, host, node);
+		if (host)
+			return;
+
+		host = calloc_a(sizeof(*host),
+				&name_buf, strlen(name) + 1,
+				&ipaddr, ipaddr_len,
+				&subnet, subnet_len,
+				&endpoint_buf, endpoint ? strlen(endpoint) + 1 : 0,
+				&gateway_buf, gateway ? strlen(endpoint) + 1 : 0);
+		host->node.key = strcpy(name_buf, name);
+		peer = &host->peer;
+	}
+
+	peer->dynamic = dynamic;
 	if ((cur = tb[NETWORK_HOST_IPADDR]) != NULL && ipaddr_len)
 		peer->ipaddr = memcpy(ipaddr, cur, ipaddr_len);
 	if ((cur = tb[NETWORK_HOST_SUBNET]) != NULL && subnet_len)
@@ -172,15 +199,18 @@ network_host_create(struct network *net, struct blob_attr *attr)
 		peer->pex_port = net->net_config.pex_port;
 	if (endpoint)
 		peer->endpoint = strcpy(endpoint_buf, endpoint);
-	if (gateway)
-		host->gateway = strcpy(gateway_buf, gateway);
 	memcpy(peer->key, key, sizeof(key));
-	host->node.key = strcpy(name_buf, name);
 
 	memcpy(&peer->local_addr.network_id,
 		   &net->net_config.addr.network_id,
 		   sizeof(peer->local_addr.network_id));
 	network_fill_host_addr(&peer->local_addr, peer->key);
+
+	if (!host)
+		return;
+
+	if (gateway)
+		host->gateway = strcpy(gateway_buf, gateway);
 
 	blobmsg_for_each_attr(cur, tb[NETWORK_HOST_GROUPS], rem) {
 		if (!blobmsg_check_attr(cur, false) ||
@@ -200,6 +230,36 @@ network_host_create(struct network *net, struct blob_attr *attr)
 	}
 }
 
+static void
+network_hosts_load_dynamic_file(struct network *net, const char *file)
+{
+	struct blob_attr *cur;
+	int rem;
+
+	blob_buf_init(&b, 0);
+
+    if (!blobmsg_add_json_from_file(&b, file))
+		return;
+
+	blob_for_each_attr(cur, b.head, rem)
+		network_host_create(net, cur, true);
+}
+
+static void
+network_hosts_load_dynamic(struct network *net)
+{
+	struct blob_attr *cur;
+	int rem;
+
+	if (!net->config.peer_data)
+		return;
+
+	blobmsg_for_each_attr(cur, net->config.peer_data, rem)
+		network_hosts_load_dynamic_file(net, blobmsg_get_string(cur));
+
+	blob_buf_free(&b);
+}
+
 void network_hosts_update_start(struct network *net)
 {
 	struct network_host *host, *htmp;
@@ -216,10 +276,17 @@ void network_hosts_update_start(struct network *net)
 	vlist_update(&net->peers);
 }
 
-void network_hosts_update_done(struct network *net)
+static void
+__network_hosts_update_done(struct network *net, bool free_net)
 {
 	struct network_host *local, *host, *tmp;
+	struct network_dynamic_peer *dyn, *dyn_tmp;
+	LIST_HEAD(old_dynamic);
 	const char *local_name;
+
+	list_splice_init(&net->dynamic_peers, &old_dynamic);
+	if (free_net)
+		goto out;
 
 	local = net->net_config.local_host;
 	if (!local)
@@ -240,8 +307,18 @@ void network_hosts_update_done(struct network *net)
 		vlist_add(&net->peers, &host->peer.node, host->peer.key);
 	}
 
+	network_hosts_load_dynamic(net);
+
+	list_for_each_entry(dyn, &net->dynamic_peers, list)
+		vlist_add(&net->peers, &dyn->peer.node, &dyn->peer.key);
+
 out:
 	vlist_flush(&net->peers);
+
+	list_for_each_entry_safe(dyn, dyn_tmp, &old_dynamic, list) {
+		list_del(&dyn->list);
+		free(dyn);
+	}
 
 	list_for_each_entry_safe(host, tmp, &old_hosts, node.list) {
 		list_del(&host->node.list);
@@ -249,11 +326,17 @@ out:
 	}
 }
 
+void network_hosts_update_done(struct network *net)
+{
+	return __network_hosts_update_done(net, false);
+}
+
 static void
 network_hosts_connect_cb(struct uloop_timeout *t)
 {
 	struct network *net = container_of(t, struct network, connect_timer);
 	struct network_host *host;
+	struct network_peer *peer;
 	union network_endpoint *ep;
 
 	avl_for_each_element(&net->hosts, host, node)
@@ -265,12 +348,7 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 
 	wg_peer_refresh(net);
 
-	avl_for_each_element(&net->hosts, host, node) {
-		struct network_peer *peer = &host->peer;
-
-		if (!network_host_is_peer(host))
-			continue;
-
+	vlist_for_each_element(&net->peers, peer, node) {
 		if (peer->state.connected)
 			continue;
 
@@ -300,11 +378,12 @@ void network_hosts_add(struct network *net, struct blob_attr *hosts)
 	int rem;
 
 	blobmsg_for_each_attr(cur, hosts, rem)
-		network_host_create(net, cur);
+		network_host_create(net, cur, false);
 }
 
 void network_hosts_init(struct network *net)
 {
+	INIT_LIST_HEAD(&net->dynamic_peers);
 	avl_init(&net->hosts, avl_strcmp, false, NULL);
 	vlist_init(&net->peers, avl_key_cmp, network_peer_update);
 	avl_init(&net->groups, avl_strcmp, false, NULL);
@@ -315,5 +394,5 @@ void network_hosts_free(struct network *net)
 {
 	uloop_timeout_cancel(&net->connect_timer);
 	network_hosts_update_start(net);
-	network_hosts_update_done(net);
+	__network_hosts_update_done(net, true);
 }

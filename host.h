@@ -14,6 +14,7 @@ struct network_peer {
 	struct blob_attr *subnet;
 	int port;
 	int pex_port;
+	bool dynamic;
 
 	struct {
 		int connect_attempt;
@@ -32,6 +33,12 @@ struct network_peer {
 		int idle;
 		int num_net_queries;
 	} state;
+};
+
+struct network_dynamic_peer {
+	struct list_head list;
+
+	struct network_peer peer;
 };
 
 struct network_host {
@@ -66,7 +73,7 @@ static inline const char *network_peer_name(struct network_peer *peer)
 {
 	struct network_host *host;
 
-	if (!peer)
+	if (!peer || peer->dynamic)
 		return "(none)";
 
 	host = container_of(peer, struct network_host, peer);

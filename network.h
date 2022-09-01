@@ -38,6 +38,7 @@ struct network {
 		struct blob_attr *tunnels;
 		struct blob_attr *net_data;
 		struct blob_attr *auth_connect;
+		struct blob_attr *peer_data;
 	} config;
 
 	struct {
@@ -58,6 +59,8 @@ struct network {
 
 	int ifindex;
 	struct network_host *prev_local_host;
+
+	struct list_head dynamic_peers;
 	struct avl_tree hosts;
 	struct vlist_tree peers;
 
@@ -82,6 +85,7 @@ enum {
 	NETWORK_ATTR_DOMAIN,
 	NETWORK_ATTR_TUNNELS,
 	NETWORK_ATTR_AUTH_CONNECT,
+	NETWORK_ATTR_PEER_DATA,
 	__NETWORK_ATTR_MAX,
 };
 
