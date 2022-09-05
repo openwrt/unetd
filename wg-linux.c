@@ -20,12 +20,12 @@
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include <linux/rtnetlink.h>
-#include <linux/wireguard.h>
 #include <netlink/msg.h>
 #include <netlink/attr.h>
 #include <netlink/socket.h>
 #include <unl.h>
 
+#include "linux/wireguard.h"
 #include "unetd.h"
 
 struct timespec64 {
