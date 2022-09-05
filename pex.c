@@ -879,17 +879,6 @@ global_pex_recv(struct pex_hdr *hdr, struct sockaddr_in6 *addr)
 		if (!peer)
 			break;
 
-		if (IN6_IS_ADDR_V4MAPPED(&addr->sin6_addr)) {
-			struct sockaddr_in *sin = (struct sockaddr_in *)addr;
-			struct in_addr in = *(struct in_addr *)&addr->sin6_addr.s6_addr[12];
-			int port = addr->sin6_port;
-
-			memset(addr, 0, sizeof(*addr));
-			sin->sin_port = port;
-			sin->sin_family = AF_INET;
-			sin->sin_addr = in;
-		}
-
 		D_PEER(net, peer, "receive endpoint notification from %s",
 		  inet_ntop(addr->sin6_family, network_endpoint_addr((void *)addr, &addr_len),
 			    buf, sizeof(buf)));
@@ -899,12 +888,35 @@ global_pex_recv(struct pex_hdr *hdr, struct sockaddr_in6 *addr)
 	}
 }
 
-int global_pex_open(void)
+static void
+pex_recv_control(struct pex_msg_local_control *msg, int len)
+{
+	struct network *net;
+
+	if (msg->msg_type != 0)
+		return;
+
+	net = global_pex_find_network(msg->auth_id);
+	if (!net)
+		return;
+
+	if (!msg->timeout)
+		msg->timeout = 60;
+	network_pex_create_host(net, &msg->ep, msg->timeout);
+}
+
+int global_pex_open(const char *unix_path)
 {
 	struct sockaddr_in6 sin6 = {};
+	int ret;
 
 	sin6.sin6_family = AF_INET6;
 	sin6.sin6_port = htons(global_pex_port);
 
-	return pex_open(&sin6, sizeof(sin6), global_pex_recv, true);
+	ret = pex_open(&sin6, sizeof(sin6), global_pex_recv, true);
+
+	if (unix_path)
+		pex_unix_open(unix_path, pex_recv_control);
+
+	return ret;
 }

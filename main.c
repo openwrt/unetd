@@ -101,9 +101,10 @@ static void add_networks(void)
 int main(int argc, char **argv)
 {
 	struct cmdline_network *net;
+	const char *unix_socket = NULL;
 	int ch;
 
-	while ((ch = getopt(argc, argv, "D:dh:M:N:P:")) != -1) {
+	while ((ch = getopt(argc, argv, "D:dh:u:M:N:P:")) != -1) {
 		switch (ch) {
 		case 'D':
 			data_dir = optarg;
@@ -126,13 +127,16 @@ int main(int argc, char **argv)
 		case 'P':
 			global_pex_port = atoi(optarg);
 			break;
+		case 'u':
+			unix_socket = optarg;
+			break;
 		}
 	}
 
 	uloop_init();
 	unetd_ubus_init();
 	unetd_write_hosts();
-	global_pex_open();
+	global_pex_open(unix_socket);
 	add_networks();
 	uloop_run();
 	pex_close();

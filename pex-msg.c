@@ -4,11 +4,13 @@
  */
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libubox/list.h>
 #include <libubox/uloop.h>
+#include <libubox/usock.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
@@ -19,12 +21,33 @@
 
 static char pex_tx_buf[PEX_BUF_SIZE];
 static FILE *pex_urandom;
-static struct uloop_fd pex_fd;
+static struct uloop_fd pex_fd, pex_unix_fd;
 static LIST_HEAD(requests);
 static struct uloop_timeout gc_timer;
 static int pex_raw_v4_fd = -1, pex_raw_v6_fd = -1;
 
 static pex_recv_cb_t pex_recv_cb;
+static pex_recv_control_cb_t pex_control_cb;
+static int pex_unix_tx_fd = -1;
+
+static const void *
+get_mapped_sockaddr(const void *addr)
+{
+	static struct sockaddr_in6 sin6;
+	const struct sockaddr_in *sin = addr;
+
+	if (!sin || sin->sin_family != AF_INET)
+		return addr;
+
+	memset(&sin6, 0, sizeof(sin6));
+	sin6.sin6_family = AF_INET6;
+	sin6.sin6_addr.s6_addr[10] = 0xff;
+	sin6.sin6_addr.s6_addr[11] = 0xff;
+	memcpy(&sin6.sin6_addr.s6_addr[12], &sin->sin_addr, sizeof(struct in_addr));
+	sin6.sin6_port = sin->sin_port;
+
+	return &sin6;
+}
 
 struct pex_msg_update_recv_ctx {
 	struct list_head list;
@@ -112,12 +135,20 @@ void *pex_msg_append(size_t len)
 static void
 pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 {
-	struct sockaddr_in6 sin6;
-	static char buf[PEX_BUF_SIZE];
+	static struct sockaddr_in6 sin6;
+	static char buf[PEX_RX_BUF_SIZE];
 	struct pex_hdr *hdr = (struct pex_hdr *)buf;
 	ssize_t len;
 
 	while (1) {
+		static struct iovec iov[2] = {
+			{ .iov_base = &sin6 },
+			{ .iov_base = buf },
+		};
+		static struct msghdr msg = {
+			.msg_iov = iov,
+			.msg_iovlen = ARRAY_SIZE(iov),
+		};
 		socklen_t slen = sizeof(sin6);
 
 		len = recvfrom(fd->fd, buf, sizeof(buf), 0, (struct sockaddr *)&sin6, &slen);
@@ -135,6 +166,39 @@ pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 		if (!len)
 			continue;
 
+		if (IN6_IS_ADDR_V4MAPPED(&sin6.sin6_addr)) {
+			struct sockaddr_in *sin = (struct sockaddr_in *)&sin6;
+			struct in_addr in = *(struct in_addr *)&sin6.sin6_addr.s6_addr[12];
+			int port = sin6.sin6_port;
+
+			memset(&sin6, 0, sizeof(sin6));
+			sin->sin_port = port;
+			sin->sin_family = AF_INET;
+			sin->sin_addr = in;
+			slen = sizeof(*sin);
+		}
+
+retry:
+		if (pex_unix_tx_fd >= 0) {
+			iov[0].iov_len = slen;
+			iov[1].iov_len = len;
+			if (sendmsg(pex_unix_tx_fd, &msg, 0) < 0) {
+				switch (errno) {
+				case EINTR:
+					goto retry;
+				case EMSGSIZE:
+				case ENOBUFS:
+				case EAGAIN:
+					continue;
+				default:
+					perror("sendmsg");
+					close(pex_unix_tx_fd);
+					pex_unix_tx_fd = -1;
+					break;
+				}
+			}
+		}
+
 		if (len < sizeof(*hdr) + sizeof(struct pex_ext_hdr))
 			continue;
 
@@ -143,6 +207,86 @@ pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 			continue;
 
 		pex_recv_cb(hdr, &sin6);
+	}
+}
+
+static void
+pex_unix_cb(struct uloop_fd *fd, unsigned int events)
+{
+	static char buf[PEX_RX_BUF_SIZE];
+	static struct iovec iov = {
+		.iov_base = buf,
+		.iov_len = sizeof(buf),
+	};
+	ssize_t len;
+
+	while (1) {
+		const struct sockaddr *sa = (struct sockaddr *)buf;
+		uint8_t fd_buf[CMSG_SPACE(sizeof(int))] = { 0 };
+		struct msghdr msg = {
+			.msg_iov = &iov,
+			.msg_iovlen = 1,
+			.msg_control = fd_buf,
+			.msg_controllen = CMSG_LEN(sizeof(int)),
+		};
+		struct cmsghdr *cmsg;
+		socklen_t slen;
+		int *pfd;
+
+		cmsg = CMSG_FIRSTHDR(&msg);
+		cmsg->cmsg_type = SCM_RIGHTS;
+		cmsg->cmsg_level = SOL_SOCKET;
+		cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+
+		pfd = (int *)CMSG_DATA(cmsg);
+		*pfd = -1;
+
+		len = recvmsg(fd->fd, &msg, 0);
+		if (len < 0) {
+			if (errno == EINTR)
+				continue;
+
+			if (errno == EAGAIN)
+				break;
+
+			pex_close();
+			return;
+		}
+
+		if (*pfd >= 0) {
+			if (pex_unix_tx_fd >= 0)
+				close(pex_unix_tx_fd);
+
+			pex_unix_tx_fd = *pfd;
+		}
+
+		if (!len)
+			continue;
+
+		if (len < sizeof(*sa))
+			continue;
+
+		if (sa->sa_family == AF_LOCAL) {
+			slen = sizeof(struct sockaddr);
+			len -= slen;
+			if (len < sizeof(struct pex_msg_local_control))
+				continue;
+
+			if (pex_control_cb)
+				pex_control_cb((struct pex_msg_local_control *)&buf[slen], len);
+
+			continue;
+		}
+
+		if (sa->sa_family == AF_INET)
+			slen = sizeof(struct sockaddr_in);
+		else if (sa->sa_family == AF_INET6)
+			slen = sizeof(struct sockaddr_in6);
+		else
+			continue;
+
+		sa = get_mapped_sockaddr(sa);
+		sendto(pex_fd.fd, buf + slen, len - slen, 0, sa, sizeof(struct sockaddr_in6));
 	}
 }
 
@@ -268,8 +412,10 @@ int __pex_msg_send(int fd, const void *addr, void *ip_hdr, size_t ip_hdrlen)
 		hdr->len -= sizeof(struct pex_ext_hdr);
 		if (ip_hdrlen)
 			fd = sa->sa_family == AF_INET6 ? pex_raw_v6_fd : pex_raw_v4_fd;
-		else
+		else {
 			fd = pex_fd.fd;
+			sa = addr = get_mapped_sockaddr(addr);
+		}
 
 		if (fd < 0)
 			return -1;
@@ -612,11 +758,29 @@ close_raw:
 	return -1;
 }
 
+int pex_unix_open(const char *path, pex_recv_control_cb_t cb)
+{
+	mode_t prev_mask;
+	int fd;
+
+	pex_control_cb = cb;
+	unlink(path);
+
+	prev_mask = umask(0177);
+	fd = usock(USOCK_UDP | USOCK_UNIX | USOCK_SERVER | USOCK_NONBLOCK, path, NULL);
+	umask(prev_mask);
+	if (fd < 0)
+		return -1;
+
+	pex_unix_fd.cb = pex_unix_cb;
+	pex_unix_fd.fd = fd;
+	uloop_fd_add(&pex_unix_fd, ULOOP_READ);
+
+	return 0;
+}
+
 void pex_close(void)
 {
-	if (!pex_fd.cb)
-		return;
-
 	if (pex_raw_v4_fd >= 0)
 		close(pex_raw_v4_fd);
 	if (pex_raw_v6_fd >= 0)
@@ -624,9 +788,20 @@ void pex_close(void)
 	pex_raw_v4_fd = -1;
 	pex_raw_v6_fd = -1;
 
-	fclose(pex_urandom);
-	uloop_fd_delete(&pex_fd);
-	close(pex_fd.fd);
+	if (pex_urandom)
+		fclose(pex_urandom);
+
+	if (pex_fd.cb) {
+		uloop_fd_delete(&pex_fd);
+		close(pex_fd.fd);
+	}
+
+	if (pex_unix_fd.cb) {
+		uloop_fd_delete(&pex_unix_fd);
+		close(pex_unix_fd.fd);
+	}
+
 	pex_fd.cb = NULL;
+	pex_unix_fd.cb = NULL;
 	pex_urandom = NULL;
 }

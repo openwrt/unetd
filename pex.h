@@ -43,6 +43,6 @@ static inline bool network_pex_active(struct network_pex *pex)
 	return pex->fd.fd >= 0;
 }
 
-int global_pex_open(void);
+int global_pex_open(const char *unix_path);
 
 #endif

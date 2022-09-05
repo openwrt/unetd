@@ -6,9 +6,11 @@
 #include <stdio.h>
 #include "curve25519.h"
 #include "siphash.h"
+#include "utils.h"
 
 #define UNETD_GLOBAL_PEX_PORT		51819
 #define PEX_BUF_SIZE			1024
+#define PEX_RX_BUF_SIZE			16384
 #define UNETD_NET_DATA_SIZE_MAX		(128 * 1024)
 
 enum pex_opcode {
@@ -85,9 +87,18 @@ struct pex_msg_update_send_ctx {
 	int rem;
 };
 
+struct pex_msg_local_control {
+	int msg_type;
+	uint8_t auth_id[PEX_ID_LEN];
+	union network_endpoint ep;
+	int timeout;
+};
+
 typedef void (*pex_recv_cb_t)(struct pex_hdr *hdr, struct sockaddr_in6 *addr);
+typedef void (*pex_recv_control_cb_t)(struct pex_msg_local_control *msg, int len);
 
 int pex_open(void *addr, size_t addr_len, pex_recv_cb_t cb, bool server);
+int pex_unix_open(const char *path, pex_recv_control_cb_t cb);
 void pex_close(void);
 
 uint64_t pex_network_hash(const uint8_t *auth_key, uint64_t req_id);
