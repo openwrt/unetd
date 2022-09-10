@@ -795,10 +795,14 @@ void network_pex_close(struct network *net)
 {
 	struct network_pex *pex = &net->pex;
 	struct network_pex_host *host, *tmp;
+	uint64_t now = unet_gettime();
 
 	uloop_timeout_cancel(&pex->request_update_timer);
 	list_for_each_entry_safe(host, tmp, &pex->hosts, list) {
 		if (host->timeout)
+			continue;
+
+		if (host->last_active + UNETD_PEX_HOST_ACITVE_TIMEOUT >= now)
 			continue;
 
 		list_del(&host->list);
@@ -838,6 +842,20 @@ global_pex_find_network(const uint8_t *id)
 }
 
 static void
+global_pex_set_active(struct network *net, struct sockaddr_in6 *addr)
+{
+	struct network_pex *pex = &net->pex;
+	struct network_pex_host *host;
+
+	list_for_each_entry(host, &pex->hosts, list) {
+		if (memcmp(&host->endpoint.in6, addr, sizeof(*addr)) != 0)
+			continue;
+
+		host->last_active = unet_gettime();
+	}
+}
+
+static void
 global_pex_recv(struct pex_hdr *hdr, struct sockaddr_in6 *addr)
 {
 	struct pex_ext_hdr *ehdr = (void *)(hdr + 1);
@@ -855,6 +873,8 @@ global_pex_recv(struct pex_hdr *hdr, struct sockaddr_in6 *addr)
 		return;
 
 	*(uint64_t *)hdr->id ^= pex_network_hash(net->config.auth_key, ehdr->nonce);
+
+	global_pex_set_active(net, addr);
 
 	D("PEX global rx op=%d", hdr->opcode);
 	switch (hdr->opcode) {

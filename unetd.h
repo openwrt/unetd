@@ -45,6 +45,8 @@ extern int global_pex_port;
 
 #define UNETD_DATA_UPDATE_DELAY	(10 * 1000)
 
+#define UNETD_PEX_HOST_ACITVE_TIMEOUT	60
+
 void unetd_write_hosts(void);
 int unetd_attach_mssfix(int ifindex, int mtu);
 
