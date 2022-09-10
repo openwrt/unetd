@@ -7,3 +7,4 @@ CMakeFiles
 *.dylib
 unetd
 unet-tool
+unet-dht

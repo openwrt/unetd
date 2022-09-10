@@ -36,6 +36,7 @@ ENDIF()
 
 IF(UBUS_SUPPORT)
   SET(SOURCES ${SOURCES} ubus.c)
+  SET(DHT_SOURCES ${DHT_SOURCES} udht-ubus.c)
   ADD_DEFINITIONS(-DUBUS_SUPPORT=1)
   FIND_LIBRARY(ubus ubus)
 ELSE()
@@ -51,7 +52,10 @@ TARGET_LINK_LIBRARIES(unetd unet ubox ${ubus} blobmsg_json ${libjson} ${nl} ${bp
 ADD_EXECUTABLE(unet-tool cli.c)
 TARGET_LINK_LIBRARIES(unet-tool unet blobmsg_json ${libjson} ubox)
 
-INSTALL(TARGETS unetd unet unet-tool
+ADD_EXECUTABLE(unet-dht dht.c udht.c ${DHT_SOURCES})
+TARGET_LINK_LIBRARIES(unet-dht unet ${ubus} ubox)
+
+INSTALL(TARGETS unetd unet unet-tool unet-dht
 	RUNTIME DESTINATION sbin
 	LIBRARY DESTINATION lib
 )
