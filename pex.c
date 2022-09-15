@@ -652,11 +652,8 @@ network_pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 		if (!len)
 			continue;
 
-		if (len < sizeof(*hdr))
-			continue;
-
-		hdr->len = ntohs(hdr->len);
-		if (len - sizeof(hdr) < hdr->len)
+		hdr = pex_rx_accept(buf, len, false);
+		if (!hdr)
 			continue;
 
 		peer = pex_msg_peer(net, hdr->id);
@@ -856,14 +853,22 @@ global_pex_set_active(struct network *net, struct sockaddr_in6 *addr)
 }
 
 static void
-global_pex_recv(struct pex_hdr *hdr, struct sockaddr_in6 *addr)
+global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 {
-	struct pex_ext_hdr *ehdr = (void *)(hdr + 1);
+	struct pex_hdr *hdr;
+	struct pex_ext_hdr *ehdr;
 	struct network_peer *peer;
 	struct network *net;
-	void *data = (void *)(ehdr + 1);
 	char buf[INET6_ADDRSTRLEN];
+	void *data;
 	int addr_len;
+
+	hdr = pex_rx_accept(msg, msg_len, true);
+	if (!hdr)
+		return;
+
+	ehdr = (void *)(hdr + 1);
+	data = (void *)(ehdr + 1);
 
 	if (hdr->version != 0)
 		return;

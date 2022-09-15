@@ -165,12 +165,20 @@ pex_handle_update_request(struct sockaddr_in6 *addr, const uint8_t *id, void *da
 	uloop_end();
 }
 
-static void pex_recv(struct pex_hdr *hdr, struct sockaddr_in6 *addr)
+static void pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 {
-	struct pex_ext_hdr *ehdr = (void *)(hdr + 1);
-	void *data = (void *)(ehdr + 1);
-	uint32_t len = be32_to_cpu(hdr->len);
-	uint64_t *msg_req_id = data;
+	struct pex_hdr *hdr;
+	struct pex_ext_hdr *ehdr;
+	uint64_t *msg_req_id;
+	void *data;
+
+	hdr = pex_rx_accept(msg, msg_len, true);
+	if (!hdr)
+		return;
+
+	ehdr = (void *)(hdr + 1);
+	data = (void *)(ehdr + 1);
+	msg_req_id = data;
 
 	if (hdr->version != 0)
 		return;
@@ -185,12 +193,12 @@ static void pex_recv(struct pex_hdr *hdr, struct sockaddr_in6 *addr)
 		if (cmd != CMD_UPLOAD)
 			break;
 
-		pex_handle_update_request(addr, hdr->id, data, len);
+		pex_handle_update_request(addr, hdr->id, data, hdr->len);
 		break;
 	case PEX_MSG_UPDATE_RESPONSE:
 	case PEX_MSG_UPDATE_RESPONSE_DATA:
 	case PEX_MSG_UPDATE_RESPONSE_NO_DATA:
-		if (len < sizeof(*msg_req_id) || *msg_req_id != req_id)
+		if (hdr->len < sizeof(*msg_req_id) || *msg_req_id != req_id)
 			break;
 
 		if (cmd == CMD_DOWNLOAD &&

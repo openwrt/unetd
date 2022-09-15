@@ -137,7 +137,6 @@ pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 {
 	static struct sockaddr_in6 sin6;
 	static char buf[PEX_RX_BUF_SIZE];
-	struct pex_hdr *hdr = (struct pex_hdr *)buf;
 	ssize_t len;
 
 	while (1) {
@@ -199,14 +198,7 @@ retry:
 			}
 		}
 
-		if (len < sizeof(*hdr) + sizeof(struct pex_ext_hdr))
-			continue;
-
-		hdr->len = ntohs(hdr->len);
-		if (len - sizeof(hdr) - sizeof(struct pex_ext_hdr) < hdr->len)
-			continue;
-
-		pex_recv_cb(hdr, &sin6);
+		pex_recv_cb(buf, len, &sin6);
 	}
 }
 
@@ -664,6 +656,28 @@ error:
 	pex_msg_update_ctx_free(ctx);
 	*data_len = -1;
 	return NULL;
+}
+
+struct pex_hdr *pex_rx_accept(void *data, size_t len, bool ext)
+{
+	struct pex_hdr *hdr = data;
+	uint16_t hdr_len;
+	size_t min_size;
+
+	min_size = sizeof(*hdr);
+	if (ext)
+		min_size += sizeof(struct pex_ext_hdr);
+
+	if (len < min_size)
+		return NULL;
+
+	hdr_len = ntohs(hdr->len);
+	if (len < min_size + hdr_len)
+		return NULL;
+
+	hdr->len = hdr_len;
+
+	return hdr;
 }
 
 static void

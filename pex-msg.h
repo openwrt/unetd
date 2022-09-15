@@ -94,7 +94,9 @@ struct pex_msg_local_control {
 	int timeout;
 };
 
-typedef void (*pex_recv_cb_t)(struct pex_hdr *hdr, struct sockaddr_in6 *addr);
+struct pex_hdr *pex_rx_accept(void *data, size_t len, bool ext);
+
+typedef void (*pex_recv_cb_t)(void *data, size_t len, struct sockaddr_in6 *addr);
 typedef void (*pex_recv_control_cb_t)(struct pex_msg_local_control *msg, int len);
 
 int pex_open(void *addr, size_t addr_len, pex_recv_cb_t cb, bool server);
