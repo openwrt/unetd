@@ -103,6 +103,8 @@ int pex_open(void *addr, size_t addr_len, pex_recv_cb_t cb, bool server);
 int pex_unix_open(const char *path, pex_recv_control_cb_t cb);
 void pex_close(void);
 
+int pex_socket(void);
+int pex_raw_socket(int family);
 uint64_t pex_network_hash(const uint8_t *auth_key, uint64_t req_id);
 struct pex_hdr *__pex_msg_init(const uint8_t *pubkey, uint8_t opcode);
 struct pex_hdr *__pex_msg_init_ext(const uint8_t *pubkey, const uint8_t *auth_key,

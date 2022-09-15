@@ -26,6 +26,16 @@ static pex_recv_cb_t pex_recv_cb;
 static pex_recv_control_cb_t pex_control_cb;
 static int pex_unix_tx_fd = -1;
 
+int pex_socket(void)
+{
+	return pex_fd.fd;
+}
+
+int pex_raw_socket(int family)
+{
+	return family == AF_INET ? pex_raw_v4_fd : pex_raw_v6_fd;
+}
+
 static const void *
 get_mapped_sockaddr(const void *addr)
 {
@@ -290,7 +300,7 @@ int __pex_msg_send(int fd, const void *addr, void *ip_hdr, size_t ip_hdrlen)
 	if (fd < 0) {
 		hdr->len -= sizeof(struct pex_ext_hdr);
 		if (ip_hdrlen)
-			fd = sa->sa_family == AF_INET6 ? pex_raw_v6_fd : pex_raw_v4_fd;
+			fd = pex_raw_socket(sa->sa_family);
 		else {
 			fd = pex_fd.fd;
 			sa = addr = get_mapped_sockaddr(addr);
