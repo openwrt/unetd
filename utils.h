@@ -125,4 +125,7 @@ int rtnl_call(struct nl_msg *msg);
 
 uint64_t unet_gettime(void);
 
+int sendto_rawudp(int fd, const void *addr, void *ip_hdr, size_t ip_hdrlen,
+		  const void *data, size_t len);
+
 #endif
