@@ -383,7 +383,7 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 
 		ep = &peer->state.next_endpoint;
 		if (peer->endpoint &&
-		    network_get_endpoint(ep, peer->endpoint, peer->port,
+		    network_get_endpoint(ep, AF_UNSPEC, peer->endpoint, peer->port,
 					 peer->state.connect_attempt++))
 			continue;
 

@@ -234,7 +234,7 @@ ubus_network_connect(struct ubus_context *ctx, struct ubus_object *obj,
 		return UBUS_STATUS_INVALID_ARGUMENT;
 
 	if ((cur = tb[CONNECT_ATTR_ADDRESS]) == NULL ||
-	    network_get_endpoint(&ep, blobmsg_get_string(cur), UNETD_GLOBAL_PEX_PORT, 0) < 0 ||
+	    network_get_endpoint(&ep, AF_UNSPEC, blobmsg_get_string(cur), UNETD_GLOBAL_PEX_PORT, 0) < 0 ||
 	    !ep.in.sin_port)
 		return UBUS_STATUS_INVALID_ARGUMENT;
 

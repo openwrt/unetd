@@ -17,12 +17,12 @@
 
 #include "unetd.h"
 
-int network_get_endpoint(union network_endpoint *dest, const char *str,
+int network_get_endpoint(union network_endpoint *dest, int af, const char *str,
 			 int default_port, int idx)
 {
 	struct addrinfo hints = {
 		.ai_flags = AI_ADDRCONFIG,
-		.ai_family = AF_UNSPEC,
+		.ai_family = af,
 	};
 	char *buf = strdup(str);
 	char *host = buf, *port;
@@ -33,6 +33,9 @@ int network_get_endpoint(union network_endpoint *dest, const char *str,
 	memset(dest, 0, sizeof(*dest));
 
 	if (*host == '[') {
+		if (af == AF_INET)
+			goto out;
+
 		host++;
 		port = strchr(host, ']');
 		if (!port)

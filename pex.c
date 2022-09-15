@@ -715,7 +715,7 @@ network_pex_open_auth_connect(struct network *net)
 		if (!peer->endpoint || peer->dynamic)
 			continue;
 
-		if (network_get_endpoint(&ep, peer->endpoint,
+		if (network_get_endpoint(&ep, AF_UNSPEC, peer->endpoint,
 					 UNETD_GLOBAL_PEX_PORT, 0) < 0)
 			continue;
 
@@ -729,7 +729,7 @@ network_pex_open_auth_connect(struct network *net)
 	blobmsg_for_each_attr(cur, net->config.auth_connect, rem) {
 		union network_endpoint ep = {};
 
-		if (network_get_endpoint(&ep, blobmsg_get_string(cur),
+		if (network_get_endpoint(&ep, AF_UNSPEC, blobmsg_get_string(cur),
 					 UNETD_GLOBAL_PEX_PORT, 0) < 0)
 			continue;
 

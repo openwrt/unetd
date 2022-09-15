@@ -274,7 +274,7 @@ static int cmd_sync(const char *endpoint, int argc, char **argv)
 			return 1;
 	}
 
-	if (network_get_endpoint(&ep, endpoint, UNETD_GLOBAL_PEX_PORT, 0) < 0) {
+	if (network_get_endpoint(&ep, AF_UNSPEC, endpoint, UNETD_GLOBAL_PEX_PORT, 0) < 0) {
 		INFO("Invalid hostname/port %s\n", endpoint);
 		return 1;
 	}

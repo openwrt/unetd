@@ -53,7 +53,7 @@ network_endpoint_addr_equal(union network_endpoint *ep1, union network_endpoint 
 	return !memcmp(a1, a2, len);
 }
 
-int network_get_endpoint(union network_endpoint *dest, const char *str,
+int network_get_endpoint(union network_endpoint *dest, int af, const char *str,
 			 int default_port, int idx);
 int network_get_subnet(int af, union network_addr *addr, int *mask,
 		       const char *str);
