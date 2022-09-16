@@ -360,6 +360,35 @@ void network_hosts_update_done(struct network *net)
 	return __network_hosts_update_done(net, false);
 }
 
+static union network_endpoint *
+network_peer_next_endpoint(struct network_peer *peer)
+{
+	union network_endpoint *ep;
+	int i;
+
+	for (i = 0; i < __ENDPOINT_TYPE_MAX; i++) {
+		int cur = peer->state.next_endpoint_idx;
+
+		if (++peer->state.next_endpoint_idx == __ENDPOINT_TYPE_MAX)
+			peer->state.next_endpoint_idx = 0;
+
+		ep = &peer->state.next_endpoint[cur];
+		if (cur == ENDPOINT_TYPE_STATIC &&
+			(!peer->endpoint ||
+		     network_get_endpoint(ep, AF_UNSPEC, peer->endpoint, peer->port,
+					  peer->state.connect_attempt++)))
+			continue;
+
+		if (!ep->sa.sa_family)
+			continue;
+
+		return ep;
+	}
+
+	return NULL;
+}
+
+
 static void
 network_hosts_connect_cb(struct uloop_timeout *t)
 {
@@ -381,13 +410,8 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 		if (peer->state.connected)
 			continue;
 
-		ep = &peer->state.next_endpoint;
-		if (peer->endpoint &&
-		    network_get_endpoint(ep, AF_UNSPEC, peer->endpoint, peer->port,
-					 peer->state.connect_attempt++))
-			continue;
-
-		if (!ep->sa.sa_family)
+		ep = network_peer_next_endpoint(peer);
+		if (!ep)
 			continue;
 
 		if (memcmp(ep, &peer->state.endpoint, sizeof(*ep)) != 0)

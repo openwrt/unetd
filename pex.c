@@ -485,7 +485,7 @@ network_pex_recv_peers(struct network *net, struct network_peer *peer,
 		D_PEER(net, peer, "received peer address for %s",
 		       network_peer_name(cur));
 		flags = ntohs(data->flags);
-		ep = &cur->state.next_endpoint;
+		ep = &cur->state.next_endpoint[ENDPOINT_TYPE_PEX];
 		ep->sa.sa_family = (flags & PEER_EP_F_IPV6) ? AF_INET6 : AF_INET;
 		addr = network_endpoint_addr(ep, &len);
 		memcpy(addr, data->addr, len);
@@ -904,6 +904,7 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 	char buf[INET6_ADDRSTRLEN];
 	void *data;
 	int addr_len;
+	int ep_idx = ENDPOINT_TYPE_ENDPOINT_NOTIFY;
 
 	if (stun_msg_is_valid(msg, msg_len)) {
 		avl_for_each_element(&networks, net, node)
@@ -949,6 +950,9 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 	case PEX_MSG_ENDPOINT_PORT_NOTIFY:
 		if (hdr->len < sizeof(struct pex_endpoint_port_notify))
 			break;
+
+		ep_idx = ENDPOINT_TYPE_ENDPOINT_PORT_NOTIFY;
+		fallthrough;
 	case PEX_MSG_ENDPOINT_NOTIFY:
 		peer = pex_msg_peer(net, hdr->id);
 		if (!peer)
@@ -958,14 +962,14 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 		  inet_ntop(addr->sin6_family, network_endpoint_addr((void *)addr, &addr_len),
 			    buf, sizeof(buf)));
 
-		memcpy(&peer->state.next_endpoint, addr, sizeof(*addr));
+		memcpy(&peer->state.next_endpoint[ep_idx], addr, sizeof(*addr));
 		if (hdr->opcode == PEX_MSG_ENDPOINT_PORT_NOTIFY) {
 			struct pex_endpoint_port_notify *port = data;
 			union network_endpoint host_ep = {
 				.in6 = *addr
 			};
 
-			peer->state.next_endpoint.in.sin_port = port->port;
+			peer->state.next_endpoint[ep_idx].in.sin_port = port->port;
 			if (net->pex.num_hosts < NETWORK_PEX_HOSTS_LIMIT)
 				network_pex_create_host(net, &host_ep, 120);
 		}

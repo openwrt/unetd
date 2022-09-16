@@ -5,6 +5,14 @@
 #ifndef __UNETD_HOST_H
 #define __UNETD_HOST_H
 
+enum peer_endpoint_type {
+	ENDPOINT_TYPE_STATIC,
+	ENDPOINT_TYPE_PEX,
+	ENDPOINT_TYPE_ENDPOINT_NOTIFY,
+	ENDPOINT_TYPE_ENDPOINT_PORT_NOTIFY,
+	__ENDPOINT_TYPE_MAX,
+};
+
 struct network_peer {
 	struct vlist_node node;
 	uint8_t key[CURVE25519_KEY_SIZE];
@@ -25,7 +33,8 @@ struct network_peer {
 		union network_addr local_ep_addr;
 		union network_endpoint endpoint;
 
-		union network_endpoint next_endpoint;
+		uint8_t next_endpoint_idx;
+		union network_endpoint next_endpoint[__ENDPOINT_TYPE_MAX];
 		uint64_t last_ep_update;
 
 		uint64_t rx_bytes;
