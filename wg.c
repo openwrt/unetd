@@ -79,6 +79,7 @@ void wg_peer_set_last_handshake(struct network *net, struct network_peer *peer,
 		if (peer->state.idle > sec)
 			peer->state.idle = sec;
 		wg_peer_set_connected(net, peer, true);
+		peer->state.pinged = false;
 	}
 }
 

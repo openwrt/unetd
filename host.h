@@ -21,6 +21,7 @@ struct network_peer {
 		bool connected;
 		bool handshake;
 		bool has_local_ep_addr;
+		bool pinged;
 		union network_addr local_ep_addr;
 		union network_endpoint endpoint;
 
