@@ -68,6 +68,7 @@ Usage: ${basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<
 	domain=<name>				use <name> as hosts file domain on the remote host (default: unet)
 	connect=<val>[,<val>...]		set IP addresses that the host will contact for network updates
 	tunnels=<ifname>:<service>[,...]	set active tunnel devices
+	dht=0|1					set DHT enabled
      - service options (add-service, set-service):
 	type=<val>				set service type (required for add-service)
 	members=[+|-]<val>[,<val>...]		set/add/remove service member hosts/groups
@@ -152,6 +153,7 @@ set_list() {
 }
 set_interface_attrs() {
 	[ -n "$AUTH_KEY" ] && uci set "network.$INTERFACE.auth_key=$AUTH_KEY"
+	[ -n "$DHT" ] && uci set "network.$INTERFACE.dht=$DHT"
 	set_list connect "$CONNECT"
 	set_list tunnels "$TUNNELS"
 	uci set "network.$INTERFACE.domain=$DOMAIN"
@@ -244,6 +246,12 @@ function sync_ssh_host(host) {
 	let auth_key = args.auth_key;
 	let tunnels = replace(replace(args.tunnels ?? "", ",", " "), ":", "=");
 	let domain = args.domain ?? "unet";
+	let dht;
+
+	if (args.dht == "1" || args.dht == "0")
+		dht = args.dht;
+	else
+		dht = "";
 
 	if (!auth_key) {
 		let fh = mkstemp();
@@ -264,6 +272,7 @@ function sync_ssh_host(host) {
 	fh.write(`AUTH_KEY='${auth_key}'\n`);
 	fh.write(`TUNNELS='${tunnels}'\n`);
 	fh.write(`DOMAIN='${domain}'\n`);
+	fh.write(`DHT='${dht}'\n`);
 	fh.write(ssh_script);
 	fh.flush();
 	fh.seek();
