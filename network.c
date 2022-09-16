@@ -32,6 +32,7 @@ enum {
 	NETCONF_ATTR_PORT,
 	NETCONF_ATTR_PEX_PORT,
 	NETCONF_ATTR_KEEPALIVE,
+	NETCONF_ATTR_STUN_SERVERS,
 	__NETCONF_ATTR_MAX
 };
 
@@ -40,6 +41,7 @@ static const struct blobmsg_policy netconf_policy[__NETCONF_ATTR_MAX] = {
 	[NETCONF_ATTR_PORT] = { "port", BLOBMSG_TYPE_INT32 },
 	[NETCONF_ATTR_PEX_PORT] = { "peer-exchange-port", BLOBMSG_TYPE_INT32 },
 	[NETCONF_ATTR_KEEPALIVE] = { "keepalive", BLOBMSG_TYPE_INT32 },
+	[NETCONF_ATTR_STUN_SERVERS] = { "stun-servers", BLOBMSG_TYPE_ARRAY },
 };
 
 const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
@@ -60,6 +62,15 @@ const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 
 AVL_TREE(networks, avl_strcmp, false, NULL);
 static struct blob_buf b;
+
+static void network_load_stun_servers(struct network *net, struct blob_attr *data)
+{
+	struct blob_attr *cur;
+	int rem;
+
+	blobmsg_for_each_attr(cur, data, rem)
+		network_stun_server_add(net, blobmsg_get_string(cur));
+}
 
 static void network_load_config_data(struct network *net, struct blob_attr *data)
 {
@@ -95,6 +106,10 @@ static void network_load_config_data(struct network *net, struct blob_attr *data
 		net->net_config.keepalive = blobmsg_get_u32(cur);
 	else
 		net->net_config.keepalive = 0;
+
+	if ((cur = tb[NETCONF_ATTR_STUN_SERVERS]) != NULL &&
+	    blobmsg_check_array(cur, BLOBMSG_TYPE_STRING) > 0)
+		network_load_stun_servers(net, cur);
 }
 
 static int network_load_data(struct network *net, struct blob_attr *data)
@@ -398,6 +413,7 @@ static void network_reload(struct uloop_timeout *t)
 
 	memset(&net->net_config, 0, sizeof(net->net_config));
 
+	network_stun_free(net);
 	network_pex_close(net);
 	network_services_free(net);
 	network_hosts_update_start(net);
@@ -424,6 +440,7 @@ static void network_reload(struct uloop_timeout *t)
 	unetd_write_hosts();
 	network_do_update(net, true);
 	network_pex_open(net);
+	network_stun_start(net);
 	unetd_ubus_notify(net);
 }
 
@@ -469,6 +486,7 @@ static void network_teardown(struct network *net)
 	uloop_timeout_cancel(&net->connect_timer);
 	uloop_timeout_cancel(&net->reload_timer);
 	network_do_update(net, false);
+	network_stun_free(net);
 	network_pex_close(net);
 	network_pex_free(net);
 	network_hosts_free(net);
@@ -600,6 +618,7 @@ network_alloc(const char *name)
 	avl_insert(&networks, &net->node);
 
 	network_pex_init(net);
+	network_stun_init(net);
 	network_hosts_init(net);
 	network_services_init(net);
 

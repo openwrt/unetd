@@ -102,7 +102,7 @@ wg_linux_init_local(struct network *net, struct network_peer *peer)
 	struct nl_msg *msg;
 
 	msg = wg_genl_msg(net, true);
-	nla_put_u16(msg, WGDEVICE_A_LISTEN_PORT, peer->port);
+	nla_put_u16(msg, WGDEVICE_A_LISTEN_PORT, peer ? peer->port : 0);
 
 	return wg_genl_call(msg);
 }

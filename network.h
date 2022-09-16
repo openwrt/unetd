@@ -49,6 +49,7 @@ struct network {
 		int port;
 		int pex_port;
 		bool local_host_changed;
+		struct blob_attr *stun_list;
 	} net_config;
 
 	void *net_data;
@@ -71,6 +72,7 @@ struct network {
 	struct uloop_timeout connect_timer;
 
 	struct network_pex pex;
+	struct network_stun stun;
 };
 
 enum {

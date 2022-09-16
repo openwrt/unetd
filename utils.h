@@ -30,11 +30,13 @@ static inline void *
 network_endpoint_addr(union network_endpoint *ep, int *addr_len)
 {
 	if (ep->sa.sa_family == AF_INET6) {
-		*addr_len = sizeof(ep->in6.sin6_addr);
+		if (addr_len)
+			*addr_len = sizeof(ep->in6.sin6_addr);
 		return &ep->in6.sin6_addr;
 	}
 
-	*addr_len = sizeof(ep->in.sin_addr);
+	if (addr_len)
+		*addr_len = sizeof(ep->in.sin_addr);
 	return &ep->in.sin_addr;
 }
 

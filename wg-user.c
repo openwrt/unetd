@@ -274,7 +274,7 @@ wg_user_init_local(struct network *net, struct network_peer *peer)
 	if (wg_req_init(&req, net, true))
 		return -1;
 
-	wg_req_set_int(&req, "listen_port", peer->port);
+	wg_req_set_int(&req, "listen_port", peer ? peer->port : 0);
 
 	return wg_req_done(&req);
 }

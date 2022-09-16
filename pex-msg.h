@@ -24,6 +24,7 @@ enum pex_opcode {
 	PEX_MSG_UPDATE_RESPONSE_DATA,
 	PEX_MSG_UPDATE_RESPONSE_NO_DATA,
 	PEX_MSG_ENDPOINT_NOTIFY,
+	PEX_MSG_ENDPOINT_PORT_NOTIFY,
 };
 
 #define PEX_ID_LEN		8
@@ -74,6 +75,10 @@ struct pex_update_response_data {
 struct pex_update_response_no_data {
 	uint64_t req_id; /* must be first */
 	uint64_t cur_version;
+};
+
+struct pex_endpoint_port_notify {
+	uint16_t port;
 };
 
 struct pex_msg_update_send_ctx {

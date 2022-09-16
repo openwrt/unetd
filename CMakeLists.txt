@@ -4,7 +4,7 @@ PROJECT(unetd C)
 
 
 SET(SOURCES
-	main.c network.c host.c service.c pex.c
+	main.c network.c host.c service.c pex.c pex-stun.c
 	wg.c wg-user.c
 )
 
@@ -43,7 +43,7 @@ ELSE()
   SET(ubus "")
 ENDIF()
 
-ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c auth-data.c chacha20.c pex-msg.c utils.c)
+ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c auth-data.c chacha20.c pex-msg.c utils.c stun.c)
 TARGET_LINK_LIBRARIES(unet ubox)
 
 ADD_EXECUTABLE(unetd ${SOURCES})
