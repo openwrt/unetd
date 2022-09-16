@@ -15,6 +15,7 @@ struct network_pex_host {
 	struct list_head list;
 	uint64_t timeout;
 	uint64_t last_active;
+	uint64_t last_ping;
 	union network_endpoint endpoint;
 };
 

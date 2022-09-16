@@ -253,6 +253,8 @@ network_pex_host_request_update(struct network *net, struct network_pex_host *ho
 	char addrstr[INET6_ADDRSTRLEN];
 	uint64_t version = 0;
 
+	host->last_ping = unet_gettime();
+
 	if (net->net_data_len)
 		version = net->net_data_version;
 
@@ -282,23 +284,27 @@ network_pex_request_update_cb(struct uloop_timeout *t)
 {
 	struct network *net = container_of(t, struct network, pex.request_update_timer);
 	struct network_pex *pex = &net->pex;
-	struct network_pex_host *host;
+	struct network_pex_host *host, *tmp;
+	uint64_t now = unet_gettime();
 
-	uloop_timeout_set(t, 5000);
+	uloop_timeout_set(t, 500);
 
-retry:
 	if (list_empty(&pex->hosts))
 		return;
 
-	host = list_first_entry(&pex->hosts, struct network_pex_host, list);
-	if (host->timeout && host->timeout < unet_gettime()) {
-		list_del(&host->list);
-		free(host);
-		goto retry;
-	}
+	list_for_each_entry_safe(host, tmp, &pex->hosts, list) {
+		if (host->timeout && host->timeout < now) {
+			list_del(&host->list);
+			free(host);
+			continue;
+		}
 
-	list_move_tail(&host->list, &pex->hosts);
-	network_pex_host_request_update(net, host);
+		if (host->last_ping + 10 >= now)
+			continue;
+
+		list_move_tail(&host->list, &pex->hosts);
+		network_pex_host_request_update(net, host);
+	}
 }
 
 void network_pex_init(struct network *net)
@@ -701,13 +707,17 @@ void network_pex_create_host(struct network *net, union network_endpoint *ep,
 {
 	struct network_pex *pex = &net->pex;
 	struct network_pex_host *host;
+	uint64_t now = unet_gettime();
 	bool new_host = false;
 
 	list_for_each_entry(host, &pex->hosts, list) {
 		if (memcmp(&host->endpoint, ep, sizeof(host->endpoint)) != 0)
 			continue;
 
-		list_move_tail(&host->list, &pex->hosts);
+		if (host->last_ping + 10 < now) {
+			list_move_tail(&host->list, &pex->hosts);
+			network_pex_host_request_update(net, host);
+		}
 		goto out;
 	}
 
@@ -719,7 +729,6 @@ void network_pex_create_host(struct network *net, union network_endpoint *ep,
 out:
 	if (timeout && (new_host || host->timeout))
 		host->timeout = timeout + unet_gettime();
-	network_pex_host_request_update(net, host);
 }
 
 static void
