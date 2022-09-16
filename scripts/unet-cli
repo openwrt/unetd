@@ -52,6 +52,7 @@ Usage: ${basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<
 	port=<val>				set tunnel port (default: ${defaults.port})
 	pex_port=<val>				set peer-exchange port (default: ${defaults.pex_port}, 0: disabled)
 	keepalive=<val>				set keepalive interval (seconds, 0: off, default: ${defaults.keepalive})
+	stun=[+|-]<host:port>[,<host:port>...]	set/add/remove STUN servers
       - host options (add-host, add-ssh-host, set-host):
 	key=<val>				set host public key (required for add-host)
 	port=<val>				set host tunnel port number
@@ -380,6 +381,7 @@ case 'set-config':
 		keepalive: "int",
 	});
 	set_field("int", net_data.config, "peer-exchange-port", args.pex_port);
+	set_field("array", net_data.config, "stun-servers", args.stun);
 	break;
 
 case 'add-host':
