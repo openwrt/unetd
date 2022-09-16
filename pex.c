@@ -376,6 +376,7 @@ network_pex_query_hosts(struct network *net)
 
 			D_PEER(net, peer, "send query for %d hosts", hosts);
 			pex_msg_send(net, peer);
+			peer->state.last_query_sent = now;
 			return;
 		}
 	}
