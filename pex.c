@@ -330,6 +330,7 @@ static void
 network_pex_query_hosts(struct network *net)
 {
 	struct network_host *host;
+	uint64_t now;
 	int rv = rand();
 	int hosts = 0;
 	int i;
@@ -355,6 +356,7 @@ network_pex_query_hosts(struct network *net)
 	if (!hosts)
 		return;
 
+	now = unet_gettime();
 	rv %= net->hosts.count;
 	for (i = 0; i < 2; i++) {
 		avl_for_each_element(&net->hosts, host, node) {
@@ -368,7 +370,8 @@ network_pex_query_hosts(struct network *net)
 			if (host == net->net_config.local_host)
 				continue;
 
-			if (!peer->state.connected)
+			if (!peer->state.connected ||
+			    peer->state.last_query_sent + 15 >= now)
 				continue;
 
 			D_PEER(net, peer, "send query for %d hosts", hosts);
@@ -421,6 +424,7 @@ void network_pex_event(struct network *net, struct network_peer *peer,
 
 	switch (ev) {
 	case PEX_EV_HANDSHAKE:
+		peer->state.last_query_sent = 0;
 		pex_send_hello(net, peer);
 		if (net->config.type == NETWORK_TYPE_DYNAMIC)
 			network_pex_send_update_request(net, peer, NULL);

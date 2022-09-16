@@ -40,6 +40,8 @@ struct network_peer {
 		uint64_t rx_bytes;
 		uint64_t last_handshake;
 		uint64_t last_request;
+		uint64_t last_query_sent;
+
 		int idle;
 		int num_net_queries;
 	} state;
