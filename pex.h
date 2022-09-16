@@ -9,6 +9,8 @@
 #include <libubox/uloop.h>
 #include "stun.h"
 
+#define NETWORK_PEX_HOSTS_LIMIT	128
+
 struct network;
 
 struct network_pex_host {
@@ -22,6 +24,7 @@ struct network_pex_host {
 struct network_pex {
 	struct uloop_fd fd;
 	struct list_head hosts;
+	int num_hosts;
 	struct uloop_timeout request_update_timer;
 };
 

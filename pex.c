@@ -280,6 +280,16 @@ network_pex_host_request_update(struct network *net, struct network_pex_host *ho
 }
 
 static void
+network_pex_free_host(struct network *net, struct network_pex_host *host)
+{
+	struct network_pex *pex = &net->pex;
+
+	pex->num_hosts--;
+	list_del(&host->list);
+	free(host);
+}
+
+static void
 network_pex_request_update_cb(struct uloop_timeout *t)
 {
 	struct network *net = container_of(t, struct network, pex.request_update_timer);
@@ -294,8 +304,7 @@ network_pex_request_update_cb(struct uloop_timeout *t)
 
 	list_for_each_entry_safe(host, tmp, &pex->hosts, list) {
 		if (host->timeout && host->timeout < now) {
-			list_del(&host->list);
-			free(host);
+			network_pex_free_host(net, host);
 			continue;
 		}
 
@@ -725,6 +734,7 @@ void network_pex_create_host(struct network *net, union network_endpoint *ep,
 	new_host = true;
 	memcpy(&host->endpoint, ep, sizeof(host->endpoint));
 	list_add_tail(&host->list, &pex->hosts);
+	pex->num_hosts++;
 
 out:
 	if (timeout && (new_host || host->timeout))
@@ -837,8 +847,7 @@ void network_pex_close(struct network *net)
 		if (host->last_active + UNETD_PEX_HOST_ACITVE_TIMEOUT >= now)
 			continue;
 
-		list_del(&host->list);
-		free(host);
+		network_pex_free_host(net, host);
 	}
 
 	if (pex->fd.fd < 0)
@@ -854,10 +863,8 @@ void network_pex_free(struct network *net)
 	struct network_pex *pex = &net->pex;
 	struct network_pex_host *host, *tmp;
 
-	list_for_each_entry_safe(host, tmp, &pex->hosts, list) {
-		list_del(&host->list);
-		free(host);
-	}
+	list_for_each_entry_safe(host, tmp, &pex->hosts, list)
+		network_pex_free_host(net, host);
 }
 
 static struct network *
@@ -954,8 +961,13 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 		memcpy(&peer->state.next_endpoint, addr, sizeof(*addr));
 		if (hdr->opcode == PEX_MSG_ENDPOINT_PORT_NOTIFY) {
 			struct pex_endpoint_port_notify *port = data;
+			union network_endpoint host_ep = {
+				.in6 = *addr
+			};
 
 			peer->state.next_endpoint.in.sin_port = port->port;
+			if (net->pex.num_hosts < NETWORK_PEX_HOSTS_LIMIT)
+				network_pex_create_host(net, &host_ep, 120);
 		}
 		break;
 	}
