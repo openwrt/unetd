@@ -380,11 +380,6 @@ void network_pex_event(struct network *net, struct network_peer *peer,
 	if (!network_pex_active(&net->pex))
 		return;
 
-	if (peer)
-		D_PEER(net, peer, "PEX event type=%d", ev);
-	else
-		D_NET(net, "PEX event type=%d", ev);
-
 	switch (ev) {
 	case PEX_EV_HANDSHAKE:
 		pex_send_hello(net, peer);
