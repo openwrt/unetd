@@ -295,6 +295,13 @@ ubus_connect_handler(struct ubus_context *ctx)
 		fprintf(stderr, "Failed to add object: %s\n", ubus_strerror(ret));
 }
 
+void unetd_ubus_notify(struct network *net)
+{
+	blob_buf_init(&b, 0);
+	blobmsg_add_string(&b, "network", network_name(net));
+	ubus_notify(&conn.ctx, &unetd_object, "network_update", b.head, -1);
+}
+
 void unetd_ubus_netifd_update(struct blob_attr *data)
 {
 	uint32_t id;
