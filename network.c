@@ -363,6 +363,84 @@ network_fill_subnets(struct network *net, struct blob_buf *buf)
 	__network_fill_subnets(net, buf, true);
 }
 
+static bool
+__network_skip_endpoint_route(struct network *net, struct network_host *host,
+			      union network_endpoint *ep)
+{
+	bool ipv6 = ep->sa.sa_family == AF_INET6;
+	uint32_t *subnet32, *addr32, mask32;
+	union network_addr addr = {};
+	struct blob_attr *cur;
+	int mask, rem;
+
+	blobmsg_for_each_attr(cur, host->peer.ipaddr, rem) {
+		const char *str = blobmsg_get_string(cur);
+
+		if (!!strchr(str, ':') != ipv6)
+			continue;
+
+		if (inet_pton(ep->sa.sa_family, str, &addr) != 1)
+			continue;
+
+		if (ipv6) {
+			if (!memcmp(&addr.in6, &ep->in6.sin6_addr, sizeof(addr.in6)))
+				return true;
+		} else {
+			if (!memcmp(&addr.in, &ep->in.sin_addr, sizeof(addr.in)))
+				return true;
+		}
+	}
+
+	if (ipv6)
+		addr32 = (uint32_t *)&ep->in6.sin6_addr;
+	else
+		addr32 = (uint32_t *)&ep->in.sin_addr;
+
+	subnet32 = (uint32_t *)&addr;
+	blobmsg_for_each_attr(cur, host->peer.subnet, rem) {
+		const char *str = blobmsg_get_string(cur);
+		int i;
+
+		if (!!strchr(str, ':') != ipv6)
+			continue;
+
+		if (network_get_subnet(ep->sa.sa_family, &addr, &mask, str))
+			continue;
+
+		if (mask <= 1)
+			continue;
+
+		for (i = 0; i < (ipv6 ? 4 : 1); i++) {
+			int cur_mask = mask > 32 ? 32 : mask;
+
+			if (mask > 32)
+				mask -= 32;
+			else
+				mask = 0;
+
+			mask32 = ~0ULL << (32 - cur_mask);
+			if (ntohl(subnet32[i] ^ addr32[i]) & mask32)
+				continue;
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+bool network_skip_endpoint_route(struct network *net, union network_endpoint *ep)
+{
+	struct network_host *host;
+
+	avl_for_each_element(&net->hosts, host, node)
+		if (__network_skip_endpoint_route(net, host, ep))
+			return true;
+
+	return false;
+}
+
+
 static void
 network_do_update(struct network *net, bool up)
 {

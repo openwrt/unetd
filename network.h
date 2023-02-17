@@ -100,6 +100,7 @@ static inline const char *network_name(struct network *net)
 	return net->node.key;
 }
 
+bool network_skip_endpoint_route(struct network *net, union network_endpoint *ep);
 void network_fill_host_addr(union network_addr *addr, uint8_t *key);
 int network_save_dynamic(struct network *net);
 void network_soft_reload(struct network *net);

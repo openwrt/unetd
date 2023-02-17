@@ -414,7 +414,8 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 		if (!ep)
 			continue;
 
-		if (memcmp(ep, &peer->state.endpoint, sizeof(*ep)) != 0)
+		if (memcmp(ep, &peer->state.endpoint, sizeof(*ep)) != 0 &&
+		    !network_skip_endpoint_route(net, ep))
 			unetd_ubus_netifd_add_route(net, ep);
 
 		wg_peer_connect(net, peer, ep);
