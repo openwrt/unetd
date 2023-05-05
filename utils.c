@@ -200,7 +200,7 @@ uint64_t unet_gettime(void)
 }
 
 static inline uint32_t
-csum_tcpudp_nofold(uint32_t saddr, uint32_t daddr, uint32_t len, uint8_t proto)
+csum_tcpudp_nofold(uint32_t saddr, uint32_t daddr, uint8_t proto, uint32_t len)
 {
 	uint64_t sum = 0;
 
