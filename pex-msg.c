@@ -424,8 +424,10 @@ pex_msg_update_request_init(const uint8_t *pubkey, const uint8_t *priv_key,
 	memcpy(&ctx->addr, addr, sizeof(ctx->addr));
 	memcpy(ctx->auth_key, auth_key, sizeof(ctx->auth_key));
 	memcpy(ctx->priv_key, priv_key, sizeof(ctx->priv_key));
-	if (!fread(&ctx->req_id, sizeof(ctx->req_id), 1, pex_urandom))
+	if (!fread(&ctx->req_id, sizeof(ctx->req_id), 1, pex_urandom)) {
+		free(ctx);
 		return NULL;
+	}
 	list_add_tail(&ctx->list, &requests);
 	if (!gc_timer.pending)
 		uloop_timeout_set(&gc_timer, 1000);
