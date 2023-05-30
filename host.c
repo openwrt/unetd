@@ -179,7 +179,7 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 				&ipaddr, ipaddr_len,
 				&subnet, subnet_len,
 				&endpoint_buf, endpoint ? strlen(endpoint) + 1 : 0,
-				&gateway_buf, gateway ? strlen(endpoint) + 1 : 0);
+				&gateway_buf, gateway ? strlen(gateway) + 1 : 0);
 		host->node.key = strcpy(name_buf, name);
 		peer = &host->peer;
 	}
