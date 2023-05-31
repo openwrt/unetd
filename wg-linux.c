@@ -36,7 +36,7 @@ struct timespec64 {
 struct wg_linux_peer_req {
 	struct nl_msg *msg;
 
-	struct nlattr *peers, *entry;
+	struct nlattr *peers, *entry, *ips;
 };
 
 static struct unl unl;
@@ -147,13 +147,33 @@ wg_linux_peer_req_done(struct wg_linux_peer_req *req)
 	return wg_genl_call(req->msg);
 }
 
-static void
-wg_linux_peer_msg_add_allowed_ip(struct nl_msg *msg, struct network_peer *peer)
+static struct nl_msg *
+wg_linux_peer_msg_size_check(struct wg_linux_peer_req *req, struct network *net,
+			     struct network_peer *peer)
 {
+	if (nlmsg_get_max_size(req->msg) >
+	    nlmsg_total_size(nlmsg_hdr(req->msg)->nlmsg_len) + 256)
+		return req->msg;
+
+	nla_nest_end(req->msg, req->ips);
+	wg_linux_peer_req_done(req);
+
+	wg_linux_peer_req_init(net, peer, req);
+	req->ips = nla_nest_start(req->msg, WGPEER_A_ALLOWEDIPS);
+
+	return req->msg;
+}
+
+static void
+wg_linux_peer_msg_add_allowed_ip(struct wg_linux_peer_req *req, struct network *net,
+				 struct network_peer *peer)
+{
+	struct nl_msg *msg = req->msg;
 	struct blob_attr *cur;
 	int rem;
 
 	wg_linux_msg_add_ip(msg, AF_INET6, &peer->local_addr.in6, 128);
+	msg = wg_linux_peer_msg_size_check(req, net, peer);
 
 	blobmsg_for_each_attr(cur, peer->ipaddr, rem) {
 		const char *str = blobmsg_get_string(cur);
@@ -172,6 +192,7 @@ wg_linux_peer_msg_add_allowed_ip(struct nl_msg *msg, struct network_peer *peer)
 			continue;
 
 		wg_linux_msg_add_ip(msg, af, &in6, mask);
+		msg = wg_linux_peer_msg_size_check(req, net, peer);
 	}
 
 	blobmsg_for_each_attr(cur, peer->subnet, rem) {
@@ -185,8 +206,8 @@ wg_linux_peer_msg_add_allowed_ip(struct nl_msg *msg, struct network_peer *peer)
 			continue;
 
 		wg_linux_msg_add_ip(msg, af, &addr, mask);
+		msg = wg_linux_peer_msg_size_check(req, net, peer);
 	}
-
 }
 
 static int
@@ -194,25 +215,24 @@ wg_linux_peer_update(struct network *net, struct network_peer *peer, enum wg_upd
 {
 	struct wg_linux_peer_req req;
 	struct network_host *host;
-	struct nl_msg *msg;
-	struct nlattr *ips;
 
-	msg = wg_linux_peer_req_init(net, peer, &req);
+	wg_linux_peer_req_init(net, peer, &req);
 
 	if (cmd == WG_PEER_DELETE) {
-		nla_put_u32(msg, WGPEER_A_FLAGS, WGPEER_F_REMOVE_ME);
+		nla_put_u32(req.msg, WGPEER_A_FLAGS, WGPEER_F_REMOVE_ME);
 		goto out;
 	}
 
-	nla_put_u32(msg, WGPEER_A_FLAGS, WGPEER_F_REPLACE_ALLOWEDIPS);
+	nla_put_u32(req.msg, WGPEER_A_FLAGS, WGPEER_F_REPLACE_ALLOWEDIPS);
 
-	ips = nla_nest_start(msg, WGPEER_A_ALLOWEDIPS);
+	req.ips = nla_nest_start(req.msg, WGPEER_A_ALLOWEDIPS);
 
-	wg_linux_peer_msg_add_allowed_ip(msg, peer);
+	wg_linux_peer_msg_add_allowed_ip(&req, net, peer);
+
 	for_each_routed_host(host, net, peer)
-		wg_linux_peer_msg_add_allowed_ip(msg, &host->peer);
+		wg_linux_peer_msg_add_allowed_ip(&req, net, &host->peer);
 
-	nla_nest_end(msg, ips);
+	nla_nest_end(req.msg, req.ips);
 
 out:
 	return wg_linux_peer_req_done(&req);
