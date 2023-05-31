@@ -44,10 +44,19 @@ static struct unl unl;
 static int
 wg_nl_init(void)
 {
+	int ret;
+
 	if (unl.sock)
 		return 0;
 
-	return unl_genl_init(&unl, "wireguard");
+	ret = unl_genl_init(&unl, "wireguard");
+	if (ret)
+		return ret;
+
+	nl_socket_set_buffer_size(unl.sock, 32768, 32768);
+	nlmsg_set_default_size(32768);
+
+	return 0;
 }
 
 static struct nl_msg *
