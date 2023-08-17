@@ -541,6 +541,7 @@ network_pex_recv_update_request(struct network *net, struct network_peer *peer,
 				struct sockaddr_in6 *addr)
 {
 	struct pex_update_request *req = (struct pex_update_request *)data;
+	struct pex_endpoint_port_notify *port_data;
 	struct pex_msg_update_send_ctx ctx = {};
 	uint64_t req_version = be64_to_cpu(req->cur_version);
 	int *query_count;
@@ -579,7 +580,7 @@ network_pex_recv_update_request(struct network *net, struct network_peer *peer,
 		return;
 
 	if (req_version >= net->net_data_version)
-		return;
+		goto out;
 
 	pex_msg_update_response_init(&ctx, net->config.pubkey, net->config.auth_key,
 				     peer->key, !!addr, (void *)data,
@@ -588,6 +589,20 @@ network_pex_recv_update_request(struct network *net, struct network_peer *peer,
 		pex_msg_send_ext(net, peer, addr);
 		done = !pex_msg_update_response_continue(&ctx);
 	}
+
+out:
+	if (peer->state.connected || !net->net_config.local_host)
+		return;
+
+	pex_msg_init_ext(net, PEX_MSG_ENDPOINT_PORT_NOTIFY, !!addr);
+
+	port_data = pex_msg_append(sizeof(*port_data));
+	if (net->stun.port_ext)
+		port_data->port = htons(net->stun.port_ext);
+	else
+		port_data->port = htons(net->net_config.local_host->peer.port);
+
+	pex_msg_send_ext(net, peer, addr);
 }
 
 static void
