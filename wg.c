@@ -47,7 +47,7 @@ struct network_peer *wg_peer_update_start(struct network *net, const uint8_t *ke
 	struct network_peer *peer;
 
 	peer = vlist_find(&net->peers, key, peer, node);
-	if (!peer)
+	if (!peer || peer->indirect)
 		return NULL;
 
 	peer->state.handshake = false;

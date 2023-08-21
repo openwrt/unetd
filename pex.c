@@ -39,7 +39,7 @@ pex_msg_init_ext(struct network *net, uint8_t opcode, bool ext)
 }
 
 static struct network_peer *
-pex_msg_peer(struct network *net, const uint8_t *id)
+pex_msg_peer(struct network *net, const uint8_t *id, bool allow_indirect)
 {
 	struct network_peer *peer;
 	uint8_t key[WG_KEY_LEN] = {};
@@ -50,6 +50,8 @@ pex_msg_peer(struct network *net, const uint8_t *id)
 		D_NET(net, "can't find peer %s", pex_peer_id_str(id));
 		return NULL;
 	}
+	if (peer->indirect && !allow_indirect)
+		return NULL;
 
 	return peer;
 }
@@ -154,7 +156,7 @@ network_pex_handle_endpoint_change(struct network *net, struct network_peer *pee
 	struct network_peer *cur;
 
 	vlist_for_each_element(&net->peers, cur, node) {
-		if (cur == peer || !cur->state.connected)
+		if (cur == peer || !cur->state.connected || cur->indirect)
 			continue;
 
 		pex_msg_init(net, PEX_MSG_NOTIFY_PEERS);
@@ -483,7 +485,7 @@ network_pex_recv_peers(struct network *net, struct network_peer *peer,
 			continue;
 		}
 
-		cur = pex_msg_peer(net, data->peer_id);
+		cur = pex_msg_peer(net, data->peer_id, false);
 		if (!cur || cur == peer)
 			continue;
 
@@ -507,7 +509,7 @@ network_pex_recv_query(struct network *net, struct network_peer *peer,
 
 	pex_msg_init(net, PEX_MSG_NOTIFY_PEERS);
 	for (; len >= 8; data += 8, len -= 8) {
-		cur = pex_msg_peer(net, data);
+		cur = pex_msg_peer(net, data, false);
 		if (!cur || !cur->state.connected)
 			continue;
 
@@ -717,7 +719,7 @@ network_pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 		if (!hdr)
 			continue;
 
-		peer = pex_msg_peer(net, hdr->id);
+		peer = pex_msg_peer(net, hdr->id, false);
 		if (!peer)
 			continue;
 
@@ -958,7 +960,7 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 	case PEX_MSG_PONG:
 		break;
 	case PEX_MSG_UPDATE_REQUEST:
-		peer = pex_msg_peer(net, hdr->id);
+		peer = pex_msg_peer(net, hdr->id, true);
 		network_pex_recv_update_request(net, peer, data, hdr->len,
 						addr);
 		break;
@@ -974,7 +976,7 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 		ep_idx = ENDPOINT_TYPE_ENDPOINT_PORT_NOTIFY;
 		fallthrough;
 	case PEX_MSG_ENDPOINT_NOTIFY:
-		peer = pex_msg_peer(net, hdr->id);
+		peer = pex_msg_peer(net, hdr->id, true);
 		if (!peer)
 			break;
 

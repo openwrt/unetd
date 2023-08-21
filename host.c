@@ -40,6 +40,9 @@ network_peer_update(struct vlist_tree *tree,
 			return;
 	}
 
+	if ((h_new ? h_new : h_old)->indirect)
+		return;
+
 	if (h_new)
 		ret = wg_peer_update(net, h_new, h_old ? WG_PEER_UPDATE : WG_PEER_CREATE);
 	else
@@ -335,10 +338,11 @@ __network_hosts_update_done(struct network *net, bool free_net)
 	avl_for_each_element(&net->hosts, host, node) {
 		if (host == local)
 			continue;
+		host->peer.indirect = false;
 		if (host->gateway && strcmp(host->gateway, local_name) != 0)
-			continue;
+			host->peer.indirect = true;
 		if (local->gateway && strcmp(local->gateway, network_host_name(host)) != 0)
-			continue;
+			host->peer.indirect = true;
 		vlist_add(&net->peers, &host->peer.node, host->peer.key);
 	}
 
@@ -407,7 +411,7 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 	wg_peer_refresh(net);
 
 	vlist_for_each_element(&net->peers, peer, node) {
-		if (peer->state.connected)
+		if (peer->state.connected || peer->indirect)
 			continue;
 
 		ep = network_peer_next_endpoint(peer);

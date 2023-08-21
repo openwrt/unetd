@@ -22,7 +22,7 @@ static bool has_connected_peer(struct network *net, bool pex)
 		if (pex && !peer->pex_port)
 			continue;
 
-		if (peer->state.connected)
+		if (peer->state.connected || peer->indirect)
 			return true;
 	}
 

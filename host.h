@@ -23,6 +23,7 @@ struct network_peer {
 	int port;
 	int pex_port;
 	bool dynamic;
+	bool indirect;
 
 	struct {
 		int connect_attempt;
