@@ -344,7 +344,7 @@ network_pex_query_hosts(struct network *net)
 		void *id;
 
 		if ((net->stun.port_ext && host == net->net_config.local_host) ||
-		    peer->state.connected || peer->endpoint)
+		    peer->state.connected || peer->endpoint || host->gateway)
 			continue;
 
 		id = pex_msg_append(PEX_ID_LEN);
