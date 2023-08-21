@@ -509,8 +509,14 @@ network_pex_recv_query(struct network *net, struct network_peer *peer,
 
 	pex_msg_init(net, PEX_MSG_NOTIFY_PEERS);
 	for (; len >= 8; data += 8, len -= 8) {
+		struct network_host *host;
+
 		cur = pex_msg_peer(net, data, false);
 		if (!cur || !cur->state.connected)
+			continue;
+
+		host = container_of(peer, struct network_host, peer);
+		if (host->gateway)
 			continue;
 
 		if (!pex_msg_add_peer_endpoint(net, cur, peer))
