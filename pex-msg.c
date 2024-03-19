@@ -365,7 +365,7 @@ void pex_msg_update_response_init(struct pex_msg_update_send_ctx *ctx,
 
 	res = pex_msg_append(sizeof(*res));
 	res->req_id = req->req_id;
-	res->data_len = len;
+	res->data_len = cpu_to_be32(len);
 
 	if (!fread(e_key_priv, sizeof(e_key_priv), 1, pex_urandom))
 		return;
@@ -400,7 +400,7 @@ bool pex_msg_update_response_continue(struct pex_msg_update_send_ctx *ctx)
 
 	res_ext = pex_msg_append(sizeof(*res_ext));
 	res_ext->req_id = ctx->req_id;
-	res_ext->offset = ctx->cur - ctx->data;
+	res_ext->offset = cpu_to_be32(ctx->cur - ctx->data);
 	pex_msg_update_response_fill(ctx);
 
 	return true;
@@ -482,13 +482,13 @@ void *pex_msg_update_response_recv(const void *data, int len, enum pex_opcode op
 
 		ctx = pex_msg_update_recv_ctx_get(res->req_id);
 		if (!ctx || ctx->data_len || !res->data_len ||
-		    res->data_len > UNETD_NET_DATA_SIZE_MAX)
+		    be32_to_cpu(res->data_len) > UNETD_NET_DATA_SIZE_MAX)
 			return NULL;
 
 		data += sizeof(*res);
 		len -= sizeof(*res);
 
-		ctx->data_len = res->data_len;
+		ctx->data_len = be32_to_cpu(res->data_len);
 		memcpy(ctx->e_key, res->e_key, sizeof(ctx->e_key));
 		ctx->data = malloc(ctx->data_len);
 	} else if (op == PEX_MSG_UPDATE_RESPONSE_DATA) {
@@ -498,7 +498,7 @@ void *pex_msg_update_response_recv(const void *data, int len, enum pex_opcode op
 			return NULL;
 
 		ctx = pex_msg_update_recv_ctx_get(res->req_id);
-		if (!ctx || ctx->data_ofs != res->offset)
+		if (!ctx || ctx->data_ofs != be32_to_cpu(res->offset))
 			return NULL;
 
 		data += sizeof(*res);
