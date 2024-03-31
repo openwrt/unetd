@@ -28,8 +28,7 @@ const defaults = {
 	keepalive: 10,
 };
 
-const usage_message = `
-Usage: ${basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<value> ...]
+const usage_message = `Usage: ${basename(sourcepath())} [<flags>] <file> <command> [<args>] [<option>=<value> ...]
 
      Commands:
       - create:					Create a new network file
