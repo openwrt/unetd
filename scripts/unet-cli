@@ -1,8 +1,7 @@
 #!/usr/bin/env ucode
-
 'use strict';
 
-import { access, basename, dirname, mkstemp, open, writefile } from 'fs';
+import { access, basename, dirname, mkstemp, open, writefile, popen } from 'fs';
 
 function assert(cond, message) {
 	if (!cond) {
@@ -355,6 +354,7 @@ if (command == "create") {
 		args[key] ??= `${val}`;
 	if (!access(`${file}.key`))
 		system(`${unet_tool} -G > ${file}.key`);
+	net_data.config.id = trim(popen(`unet-tool -P -K ${file}.key`).read("all"));
 }
 
 if (command == "sign") {
