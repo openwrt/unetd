@@ -93,8 +93,8 @@ static void network_load_config_data(struct network *net, struct blob_attr *data
 		const char *id = blobmsg_get_string(cur);
 		siphash_to_le64(&net->net_config.addr.network_id, id, strlen(id), &key);
 	} else {
-		siphash_to_le64(&net->net_config.addr.network_id, &net->net_config.port,
-				sizeof(net->net_config.port), &key);
+		uint32_t port = cpu_to_le32(net->net_config.port);
+		siphash_to_le64(&net->net_config.addr.network_id, &port, sizeof(port), &key);
 	}
 
 	net->net_config.addr.network_id[0] = 0xfd;
