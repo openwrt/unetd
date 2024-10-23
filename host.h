@@ -98,11 +98,17 @@ static inline bool
 network_host_uses_peer_route(struct network_host *host, struct network *net,
 			    struct network_peer *peer)
 {
-	if (&host->peer == peer || host == net->net_config.local_host)
+	struct network_host *peer_host = container_of(peer, struct network_host, peer);
+
+	if (host == peer_host || host == net->net_config.local_host)
 		return false;
 
 	if (net->net_config.local_host->gateway &&
 	    !strcmp(net->net_config.local_host->gateway, network_peer_name(peer)))
+		return true;
+
+	if (peer_host->gateway &&
+	    !strcmp(peer_host->gateway, network_host_name(net->net_config.local_host)))
 		return true;
 
 	if (!host->gateway)
