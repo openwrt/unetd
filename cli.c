@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pwd.h>
+#include <unistd.h>
 #include <libubox/utils.h>
 #include <libubox/uloop.h>
 #include <libubox/blobmsg.h>
@@ -35,6 +37,8 @@ static struct blob_buf b;
 static FILE *out_file;
 static bool quiet;
 static bool sync_done;
+static bool has_key;
+static bool password_prompt;
 static enum {
 	CMD_UNKNOWN,
 	CMD_GENERATE,
@@ -82,6 +86,9 @@ static int usage(const char *progname)
 		"	-K <keyfile>|-:		Set secret key from file or stdin\n"
 		"	-h <keyfile>|-		Set peer private key from file or stdin\n"
 		"				(for network data down-/upload)\n"
+		"	-s <n>,<salt>		Generating secret key from seed using <n> rounds and <salt>\n"
+		"				(passphrase is read from stdin)\n"
+		"	-p			Prompt for seed password\n"
 		"\n", progname);
 	return 1;
 }
@@ -429,6 +436,9 @@ static int cmd_generate(int argc, char **argv)
 	FILE *f;
 	int ret;
 
+	if (has_key)
+		goto out;
+
 	f = fopen("/dev/urandom", "r");
 	if (!f) {
 		INFO("Can't open /dev/urandom\n");
@@ -444,6 +454,8 @@ static int cmd_generate(int argc, char **argv)
 	}
 
 	ed25519_prepare(seckey);
+
+out:
 	print_key(seckey);
 
 	return 0;
@@ -475,6 +487,58 @@ static bool parse_key(uint8_t *dest, const char *str)
 		INFO("Failed to parse key data\n");
 		return false;
 	}
+
+	return true;
+}
+
+static void
+pbkdf2_hmac_sha512(uint8_t *dest, const void *key, size_t key_len,
+		   const void *salt, size_t salt_len,
+		   unsigned int rounds)
+{
+	uint8_t hash[SHA512_HASH_SIZE];
+
+	hmac_sha512(dest, key, key_len, salt, salt_len);
+
+	for (size_t i = 0; i < rounds - 1; i++) {
+		hmac_sha512(hash, key, key_len, dest, SHA512_HASH_SIZE);
+		for (size_t k = 0; k < SHA512_HASH_SIZE; k++)
+			dest[k] ^= hash[k];
+	}
+}
+
+static bool parse_seed(uint8_t *dest, const char *salt)
+{
+	uint8_t hash[SHA512_HASH_SIZE];
+	char buf[256], *pw = buf;
+	unsigned long rounds;
+	size_t len = 0;
+	char *sep;
+
+	rounds = strtoul(salt, &sep, 0);
+	if (!rounds || *sep != ',') {
+		INFO("Invalid number of rounds\n");
+		return false;
+	}
+
+	if (password_prompt) {
+		pw = getpass("Password: ");
+		if (pw)
+			len = strlen(pw);
+	} else {
+		len = fread(buf, 1, sizeof(buf), stdin);
+		if (!feof(stdin)) {
+			INFO("Key data too long\n");
+			return false;
+		}
+	}
+	if (len < 12) {
+		INFO("Key data too short\n");
+		return false;
+	}
+
+	pbkdf2_hmac_sha512(hash, pw, len, salt, strlen(salt), rounds);
+	memcpy(dest, hash, EDSIGN_PUBLIC_KEY_SIZE);
 
 	return true;
 }
@@ -530,11 +594,11 @@ int main(int argc, char **argv)
 	const char *progname = argv[0];
 	const char *out_filename = NULL;
 	const char *cmd_arg = NULL;
-	bool has_key = false, has_pubkey = false;
+	bool has_pubkey = false;
 	bool has_peerkey = false;
 	int ret, ch;
 
-	while ((ch = getopt(argc, argv, "h:k:K:o:qD:GHPSU:V")) != -1) {
+	while ((ch = getopt(argc, argv, "h:k:K:o:qD:GHpPs:SU:V")) != -1) {
 		switch (ch) {
 		case 'D':
 		case 'U':
@@ -567,6 +631,17 @@ int main(int argc, char **argv)
 
 			has_peerkey = true;
 			break;
+		case 's':
+			if (has_pubkey)
+				return usage(progname);
+
+			if (!parse_seed(seckey, optarg))
+				return 1;
+
+			has_key = true;
+			edsign_sec_to_pub(pubkey, seckey);
+			has_pubkey = true;
+			break;
 		case 'k':
 			if (has_pubkey)
 				return usage(progname);
@@ -589,6 +664,9 @@ int main(int argc, char **argv)
 
 			edsign_sec_to_pub(pubkey, seckey);
 			has_pubkey = true;
+			break;
+		case 'p':
+			password_prompt = true;
 			break;
 		case 'U':
 			cmd = CMD_UPLOAD;

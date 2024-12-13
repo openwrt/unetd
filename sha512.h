@@ -60,4 +60,7 @@ sha512_final_get(struct sha512_state *s)
 	return s->partial;
 }
 
+void hmac_sha512(void *dest, const void *key, size_t key_len,
+		 const void *data, size_t data_len);
+
 #endif

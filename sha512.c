@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Felix Fietkau <nbd@openwrt.org>
+ * Copyright (C) 2015-2024 Felix Fietkau <nbd@nbd.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -255,4 +255,35 @@ void sha512_final(struct sha512_state *s, uint8_t *hash)
 		store64(tmp, s->h[i]);
 		memcpy(hash, tmp, len);
 	}
+}
+
+void hmac_sha512(void *dest, const void *key, size_t key_len,
+		 const void *data, size_t data_len)
+{
+	uint8_t k_pad[2 * SHA512_HASH_SIZE] = {};
+	struct sha512_state s;
+
+	if (key_len > 128) {
+		sha512_init(&s);
+		sha512_add(&s, key, key_len);
+		sha512_final(&s, k_pad);
+	} else {
+		memcpy(k_pad, key, key_len);
+	}
+
+	for (size_t i = 0; i < sizeof(k_pad); i++)
+		k_pad[i] ^= 0x36;
+
+	sha512_init(&s);
+	sha512_add(&s, k_pad, sizeof(k_pad));
+	sha512_add(&s, data, data_len);
+	sha512_final(&s, dest);
+
+	for (size_t i = 0; i < sizeof(k_pad); i++)
+		k_pad[i] ^= 0x36 ^ 0x5c;
+
+	sha512_init(&s);
+	sha512_add(&s, k_pad, sizeof(k_pad));
+	sha512_add(&s, dest, SHA512_HASH_SIZE);
+	sha512_final(&s, dest);
 }
