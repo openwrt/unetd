@@ -1,7 +1,7 @@
 #!/usr/bin/env ucode
 'use strict';
 
-import { access, basename, dirname, mkstemp, open, writefile, popen } from 'fs';
+import { access, basename, dirname, mkstemp, open, readfile, writefile, popen } from 'fs';
 
 function assert(cond, message) {
 	if (!cond) {
@@ -50,6 +50,7 @@ const usage_message = `Usage: ${basename(sourcepath())} [<flags>] <file> <comman
 	port=<val>				set tunnel port (default: ${defaults.port})
 	pex_port=<val>				set peer-exchange port (default: ${defaults.pex_port}, 0: disabled)
 	keepalive=<val>				set keepalive interval (seconds, 0: off, default: ${defaults.keepalive})
+	seed[=<rounds>]				create network private key from seed passphrase
 	stun=[+|-]<host:port>[,<host:port>...]	set/add/remove STUN servers
       - host options (add-host, add-ssh-host, set-host):
 	key=<val>				set host public key (required for add-host)
@@ -188,9 +189,8 @@ let print_only = false;
 
 function fetch_args() {
 	for (let arg in ARGV) {
-		let vals = match(arg, /^(.[[:alnum:]_-]*)=(.*)$/);
-		assert(vals, `Invalid argument: ${arg}`);
-		args[vals[1]] = vals[2]
+		let vals = split(arg, "=", 2);
+		args[vals[0]] = vals[1];
 	}
 }
 
@@ -237,6 +237,15 @@ function set_service(service) {
 
 	if (service_field_types[service.type])
 		set_fields(service.config, service_field_types[service.type]);
+}
+
+function key_arg(file, net_data) {
+	let rounds = net_data.config.rounds;
+	let salt = net_data.config.salt;
+	if (salt && rounds > 0)
+		return `-p -s ${rounds},${salt}`;
+
+	return `-K ${file}.key`;
 }
 
 function sync_ssh_host(host) {
@@ -348,23 +357,21 @@ if (command == "create") {
 	}
 }
 
-if (command == "create") {
-	for (let key, val in defaults)
-		args[key] ??= `${val}`;
-	if (!access(`${file}.key`))
-		system(`${unet_tool} -G > ${file}.key`);
-	net_data.config.id = trim(popen(`unet-tool -P -K ${file}.key`).read("all"));
-}
-
 if (command == "sign") {
-	let ret = system(`${unet_tool} -S -K ${file}.key -o ${file}.bin ${file}`);
+	let ret = system(`${unet_tool} -S ${key_arg(file, net_data)} -o ${file}.bin ${file}`);
 	if (ret != 0)
 		exit(ret);
+
+	let pubkey = trim(popen(`unet-tool -b ${file}.bin -P`).read("all"));
+	if (pubkey != net_data.config.id) {
+		warn(`Signing key '${pubkey}' does not match network key '${net_data.config.id}'`);
+		exit(1);
+	}
 
 	if (args.upload) {
 		for (let host in split(args.upload, ",")) {
 			warn(`Uploading ${file}.bin to ${host}\n`);
-			ret = system(`${unet_tool} -U ${host} -K ${file}.key ${file}.bin`);
+			ret = system(`${unet_tool} -U ${host} ${file}.bin`);
 			if (ret)
 				warn("Upload failed\n");
 		}
@@ -381,6 +388,34 @@ case 'set-config':
 	});
 	set_field("int", net_data.config, "peer-exchange-port", args.pex_port);
 	set_field("array", net_data.config, "stun-servers", args.stun);
+
+	for (let key, val in defaults)
+		args[key] ??= `${val}`;
+
+	let seed_arg;
+
+	if ("seed" in args) {
+		let salt = readfile("/dev/urandom", 16);
+		salt = map(split(salt, ""), (v) => ord(v));
+		salt = join("", map(salt, (v) => sprintf("%02x", v)));
+		net_data.config.salt = salt;
+		net_data.config.rounds = int(args.seed ?? 10000);
+		delete net_data.config.id;
+		seed_arg = true;
+	}
+
+	if (!access(`${file}.key`) && !seed_arg &&
+	    system(`${unet_tool} -G -o ${file}.key`)) {
+		warn("Failed to generate key\n");
+		exit(1);
+	}
+
+	if (!net_data.config.id) {
+		net_data.config.id = trim(popen(`unet-tool -P ${key_arg(file, net_data)}`).read("all"));
+		if (!net_data.config.id)
+			exit(1);
+	}
+
 	break;
 
 case 'add-host':
