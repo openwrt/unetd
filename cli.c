@@ -89,6 +89,7 @@ static int usage(const char *progname)
 		"	-s <n>,<salt>		Generating secret key from seed using <n> rounds and <salt>\n"
 		"				(passphrase is read from stdin)\n"
 		"	-p			Prompt for seed password\n"
+		"	-b <file>:		Read signed network data file\n"
 		"\n", progname);
 	return 1;
 }
@@ -556,6 +557,7 @@ static bool cmd_needs_peerkey(void)
 static bool cmd_needs_pubkey(void)
 {
 	switch (cmd) {
+	case CMD_PUBKEY:
 	case CMD_DOWNLOAD:
 	case CMD_VERIFY:
 		return true;
@@ -568,7 +570,6 @@ static bool cmd_needs_key(void)
 {
 	switch (cmd) {
 	case CMD_SIGN:
-	case CMD_PUBKEY:
 	case CMD_HOST_PUBKEY:
 		return true;
 	default:
@@ -598,7 +599,7 @@ int main(int argc, char **argv)
 	bool has_peerkey = false;
 	int ret, ch;
 
-	while ((ch = getopt(argc, argv, "h:k:K:o:qD:GHpPs:SU:V")) != -1) {
+	while ((ch = getopt(argc, argv, "b:h:k:K:o:qD:GHpPs:SU:V")) != -1) {
 		switch (ch) {
 		case 'D':
 		case 'U':
@@ -667,6 +668,12 @@ int main(int argc, char **argv)
 			break;
 		case 'p':
 			password_prompt = true;
+			break;
+		case 'b':
+			if (load_network_data(optarg))
+				return 1;
+
+			has_pubkey = true;
 			break;
 		case 'U':
 			cmd = CMD_UPLOAD;
