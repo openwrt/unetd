@@ -48,6 +48,7 @@ static enum {
 	CMD_SIGN,
 	CMD_DOWNLOAD,
 	CMD_UPLOAD,
+	CMD_NETDATA,
 } cmd;
 
 #define INFO(...)					\
@@ -75,6 +76,7 @@ static int usage(const char *progname)
 		"	-V			Verify file\n"
 		"	-P			Get public signing key from secret key\n"
 		"	-H			Get public host key from secret key\n"
+		"	-T			Get network data from signed file\n"
 		"	-G			Generate new private key\n"
 		"	-D <host>[:<port>]	Download network data from unetd\n"
 		"	-U <host>[:<port>]	Upload network data to unetd\n"
@@ -462,6 +464,20 @@ out:
 	return 0;
 }
 
+static int cmd_netdata(int argc, char **argv)
+{
+	size_t ofs = sizeof(struct unet_auth_hdr) + sizeof(struct unet_auth_data);
+
+	if (!net_data || net_data_len <= ofs) {
+		INFO("Missing network data\n");
+		return 1;
+	}
+
+	fputs(net_data + ofs, out_file);
+
+	return 0;
+}
+
 static bool parse_key(uint8_t *dest, const char *str)
 {
 	char keystr[B64_ENCODE_LEN(EDSIGN_PUBLIC_KEY_SIZE) + 2];
@@ -584,6 +600,7 @@ static bool cmd_needs_outfile(void)
 	case CMD_PUBKEY:
 	case CMD_GENERATE:
 	case CMD_DOWNLOAD:
+	case CMD_NETDATA:
 		return true;
 	default:
 		return false;
@@ -599,13 +616,14 @@ int main(int argc, char **argv)
 	bool has_peerkey = false;
 	int ret, ch;
 
-	while ((ch = getopt(argc, argv, "b:h:k:K:o:qD:GHpPs:SU:V")) != -1) {
+	while ((ch = getopt(argc, argv, "b:h:k:K:o:qD:GHpPs:STU:V")) != -1) {
 		switch (ch) {
 		case 'D':
 		case 'U':
 		case 'G':
 		case 'H':
 		case 'S':
+		case 'T':
 		case 'P':
 		case 'V':
 			if (cmd != CMD_UNKNOWN)
@@ -689,6 +707,9 @@ int main(int argc, char **argv)
 		case 'S':
 			cmd = CMD_SIGN;
 			break;
+		case 'T':
+			cmd = CMD_NETDATA;
+			break;
 		case 'P':
 			cmd = CMD_PUBKEY;
 			break;
@@ -751,6 +772,9 @@ int main(int argc, char **argv)
 		break;
 	case CMD_VERIFY:
 		ret = cmd_verify(argc, argv);
+		break;
+	case CMD_NETDATA:
+		ret = cmd_netdata(argc, argv);
 		break;
 	case CMD_UNKNOWN:
 		ret = usage(progname);
