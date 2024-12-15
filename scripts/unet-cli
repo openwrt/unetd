@@ -314,7 +314,12 @@ while (substr(ARGV[0], 0, 1) == "-") {
 		exit(usage());
 }
 
-let hostname, ssh_host, servicename;
+let import_file, hostname, ssh_host, servicename;
+
+if (command == "import") {
+	import_file = shift(ARGV);
+	assert(import_file, "Missing import file argument");
+}
 
 if (command in [ "add-host", "set-host", "add-ssh-host", "set-ssh-host" ]) {
 	hostname = shift(ARGV);
@@ -339,6 +344,16 @@ if (command in [ "add-ssh-host", "set-ssh-host" ]) {
 }
 
 let net_data;
+
+if (command == "import") {
+	if (!access(import_file) &&
+	    index(import_file, "/") < 0)
+		import_file = "/etc/unetd/" + import_file + ".bin";
+
+	assert(access(import_file), "Invalid import file name");
+	if (system(`${unet_tool} -b ${import_file} -T -o ${file}`))
+		exit(1);
+}
 
 if (command == "create") {
 	net_data = {
@@ -380,6 +395,8 @@ if (command == "sign") {
 }
 
 switch (command) {
+case 'import':
+	break;
 case 'create':
 case 'set-config':
 	set_fields(net_data.config, {
