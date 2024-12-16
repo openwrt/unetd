@@ -430,7 +430,7 @@ case 'set-config':
 	}
 
 	if (!net_data.config.id) {
-		net_data.config.id = trim(popen(`unet-tool -P ${key_arg(file, net_data)}`).read("all"));
+		net_data.config.id = trim(popen(`unet-tool -P -p ${key_arg(file, net_data)}`).read("all"));
 		if (!net_data.config.id)
 			exit(1);
 	}
