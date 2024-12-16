@@ -38,7 +38,7 @@ static FILE *out_file;
 static bool quiet;
 static bool sync_done;
 static bool has_key;
-static bool password_prompt;
+static int password_prompt;
 static enum {
 	CMD_UNKNOWN,
 	CMD_GENERATE,
@@ -539,9 +539,20 @@ static bool parse_seed(uint8_t *dest, const char *salt)
 	}
 
 	if (password_prompt) {
+		char *pw2;
+
 		pw = getpass("Password: ");
 		if (pw)
 			len = strlen(pw);
+
+		if (pw && password_prompt > 1) {
+			pw = strcpy(buf, pw);
+			pw2 = getpass("Retype password: ");
+			if (!pw2 || strcmp(pw, pw2) != 0) {
+				INFO("Passwords do not match\n");
+				return false;
+			}
+		}
 	} else {
 		len = fread(buf, 1, sizeof(buf), stdin);
 		if (!feof(stdin)) {
@@ -685,7 +696,7 @@ int main(int argc, char **argv)
 			has_pubkey = true;
 			break;
 		case 'p':
-			password_prompt = true;
+			password_prompt++;
 			break;
 		case 'b':
 			if (load_network_data(optarg))
