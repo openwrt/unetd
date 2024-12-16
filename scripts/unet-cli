@@ -32,6 +32,7 @@ const usage_message = `Usage: ${basename(sourcepath())} [<flags>] <file> <comman
 
      Commands:
       - create:					Create a new network file
+      - import <name/path>:			Import signed network config
       - set-config:				Change network config parameters
       - add-host <name>:			Add a host
       - add-ssh-host <name> <host>:		Add a remote OpenWrt host via SSH
