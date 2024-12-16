@@ -249,10 +249,10 @@ function key_arg(file, net_data) {
 	return `-K ${file}.key`;
 }
 
-function sync_ssh_host(host) {
+function sync_ssh_host(host, net_data) {
 	let interface = args.interface ?? "unet";
 	let connect = replace(args.connect ?? "", ",", " ");
-	let auth_key = args.auth_key;
+	let auth_key = args.auth_key ?? net_data.config.id;
 	let tunnels = replace(replace(args.tunnels ?? "", ",", " "), ":", "=");
 	let domain = args.domain ?? "unet";
 	let dht;
@@ -339,11 +339,6 @@ if (command in [ "add-service", "set-service" ]) {
 
 fetch_args();
 
-if (command in [ "add-ssh-host", "set-ssh-host" ]) {
-	sync_ssh_host(ssh_host);
-	command = replace(command, "ssh-", "");
-}
-
 let net_data;
 
 if (command == "import") {
@@ -371,6 +366,11 @@ if (command == "create") {
 	} catch(e) {
 		assert(false, `Could not parse input file ${file}`);
 	}
+}
+
+if (command in [ "add-ssh-host", "set-ssh-host" ]) {
+	sync_ssh_host(ssh_host, net_data);
+	command = replace(command, "ssh-", "");
 }
 
 if (command == "sign") {
