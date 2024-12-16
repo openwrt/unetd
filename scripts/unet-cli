@@ -400,15 +400,15 @@ case 'import':
 	break;
 case 'create':
 case 'set-config':
+	for (let key, val in defaults)
+		args[key] ??= `${val}`;
+
 	set_fields(net_data.config, {
 		port: "int",
 		keepalive: "int",
 	});
 	set_field("int", net_data.config, "peer-exchange-port", args.pex_port);
 	set_field("array", net_data.config, "stun-servers", args.stun);
-
-	for (let key, val in defaults)
-		args[key] ??= `${val}`;
 
 	let seed_arg;
 
