@@ -626,6 +626,7 @@ int pex_open(void *addr, size_t addr_len, pex_recv_cb_t cb, bool server)
 			goto close_socket;
 		}
 
+		setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
 		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 		setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof(yes));
 		setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
