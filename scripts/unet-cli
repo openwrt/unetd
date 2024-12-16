@@ -399,10 +399,11 @@ switch (command) {
 case 'import':
 	break;
 case 'create':
-case 'set-config':
 	for (let key, val in defaults)
 		args[key] ??= `${val}`;
 
+	// fallthrough
+case 'set-config':
 	set_fields(net_data.config, {
 		port: "int",
 		keepalive: "int",
