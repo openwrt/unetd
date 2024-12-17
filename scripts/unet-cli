@@ -72,6 +72,7 @@ const usage_message = `Usage: ${basename(sourcepath())} [<flags>] <file> <comman
 	connect=<val>[,<val>...]		set IP addresses that the host will contact for network updates
 	tunnels=<ifname>:<service>[,...]	set active tunnel devices
 	dht=0|1					set DHT enabled
+	zone=<name>				set interface zone (default: lan, "-": unset)
      - service options (add-service, set-service):
 	type=<val>				set service type (required for add-service)
 	members=[+|-]<val>[,<val>...]		set/add/remove service member hosts/groups
@@ -160,6 +161,14 @@ set_interface_attrs() {
 	set_list connect "$CONNECT"
 	set_list tunnels "$TUNNELS"
 	uci set "network.$INTERFACE.domain=$DOMAIN"
+	[ -n "$ZONE" ] && {
+		if [ "$ZONE" = "-" ]; then
+			uci delete "network.$INTERFACE.zone"
+		else
+			uci set "network.$INTERFACE.zone=$ZONE"
+		fi
+	}
+
 }
 
 check_interface() {
@@ -251,13 +260,19 @@ function key_arg(file, net_data) {
 	return `-K ${file}.key`;
 }
 
-function sync_host(host, net_data) {
+function sync_host(host, net_data, command) {
 	let interface = args.interface ?? "unet";
 	let connect = replace(args.connect ?? "", ",", " ");
 	let auth_key = args.auth_key ?? net_data.config.id;
 	let tunnels = replace(replace(args.tunnels ?? "", ",", " "), ":", "=");
 	let domain = args.domain ?? "unet";
+	let zone = args.zone;
 	let dht;
+
+	if (command == "add-host")
+		zone ??= "lan";
+	else
+		zone ??= "";
 
 	if (args.dht == "1" || args.dht == "0")
 		dht = args.dht;
@@ -278,12 +293,15 @@ function sync_host(host, net_data) {
 	}
 
 	let fh = mkstemp();
-	fh.write(`INTERFACE='${interface}'\n`);
-	fh.write(`CONNECT='${connect}'\n`);
-	fh.write(`AUTH_KEY='${auth_key}'\n`);
-	fh.write(`TUNNELS='${tunnels}'\n`);
-	fh.write(`DOMAIN='${domain}'\n`);
-	fh.write(`DHT='${dht}'\n`);
+	fh.write(`
+INTERFACE='${interface}'
+CONNECT='${connect}'
+AUTH_KEY='${auth_key}'
+TUNNELS='${tunnels}'
+DOMAIN='${domain}'
+DHT='${dht}'
+ZONE='${zone}'
+`);
 	fh.write(ssh_script);
 	fh.flush();
 	fh.seek();
@@ -372,13 +390,13 @@ if (command == "create") {
 }
 
 if (command in [ "add-local-host", "set-local-host" ]) {
-	sync_host(null, net_data);
 	command = replace(command, "local-", "");
+	sync_host(null, net_data, command);
 }
 
 if (command in [ "add-ssh-host", "set-ssh-host" ]) {
-	sync_host(ssh_host, net_data);
 	command = replace(command, "ssh-", "");
+	sync_host(ssh_host, net_data, command);
 }
 
 if (command == "sign") {
