@@ -295,11 +295,52 @@ ubus_connect_handler(struct ubus_context *ctx)
 		fprintf(stderr, "Failed to add object: %s\n", ubus_strerror(ret));
 }
 
+static void unetd_ubus_procd_update(void)
+{
+	void *data, *firewall, *rule;
+	struct network *net;
+	uint32_t id;
+
+	blob_buf_init(&b, 0);
+	blobmsg_add_string(&b, "name", "unetd");
+
+	data = blobmsg_open_table(&b, "data");
+	firewall = blobmsg_open_array(&b, "firewall");
+
+	avl_for_each_element(&networks, net, node) {
+		if (!net->net_config.local_host || !net->config.interface)
+			continue;
+
+		rule = blobmsg_open_table(&b, NULL);
+		blobmsg_add_string(&b, "type", "rule");
+		blobmsg_add_string(&b, "proto", "udp");
+		blobmsg_add_string(&b, "src", "*");
+		blobmsg_add_u32(&b, "dest_port", net->net_config.port);
+		blobmsg_close_table(&b, rule);
+
+		rule = blobmsg_open_table(&b, NULL);
+		blobmsg_add_string(&b, "type", "rule");
+		blobmsg_add_string(&b, "proto", "udp");
+		blobmsg_add_string(&b, "src", "*");
+		blobmsg_add_u32(&b, "dest_port", net->net_config.pex_port);
+		blobmsg_close_table(&b, rule);
+	}
+
+	blobmsg_close_table(&b, firewall);
+	blobmsg_close_table(&b, data);
+
+	if (ubus_lookup_id(&conn.ctx, "service", &id))
+		return;
+
+	ubus_invoke(&conn.ctx, id, "set", b.head, NULL, NULL, -1);
+}
+
 void unetd_ubus_notify(struct network *net)
 {
 	blob_buf_init(&b, 0);
 	blobmsg_add_string(&b, "network", network_name(net));
 	ubus_notify(&conn.ctx, &unetd_object, "network_update", b.head, -1);
+	unetd_ubus_procd_update();
 }
 
 void unetd_ubus_netifd_update(struct blob_attr *data)
