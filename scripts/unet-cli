@@ -35,9 +35,11 @@ const usage_message = `Usage: ${basename(sourcepath())} [<flags>] <file> <comman
       - import <name/path>:			Import signed network config
       - set-config:				Change network config parameters
       - add-host <name>:			Add a host
+      - add-local-host <name>:			Add a local OpenWrt host directly
       - add-ssh-host <name> <host>:		Add a remote OpenWrt host via SSH
 						(<host> can contain SSH options as well)
       - set-host <name>:			Change host settings
+      - set-local-host <name>:			Update local host settings
       - set-ssh-host <name> <host>:		Update local and remote host settings
       - add-service <name>:			Add a service
       - set-service <name>:			Change service settings
@@ -53,7 +55,7 @@ const usage_message = `Usage: ${basename(sourcepath())} [<flags>] <file> <comman
 	keepalive=<val>				set keepalive interval (seconds, 0: off, default: ${defaults.keepalive})
 	seed[=<rounds>]				create network private key from seed passphrase
 	stun=[+|-]<host:port>[,<host:port>...]	set/add/remove STUN servers
-      - host options (add-host, add-ssh-host, set-host):
+      - host options (add-host, add-local-host, add-ssh-host, set-host):
 	key=<val>				set host public key (required for add-host)
 	port=<val>				set host tunnel port number
 	pex_port=<val>				set host peer-exchange port (default: network pex_port, 0: disabled)
@@ -62,7 +64,7 @@ const usage_message = `Usage: ${basename(sourcepath())} [<flags>] <file> <comman
 	subnet=[+|-]<val>[,<val>...]		set/add/remove host announced subnets
 	endpoint=<val>				set host endpoint address
 	gateway=<name>				set host gateway (using name of other host)
-     - ssh host options (add-ssh-host, set-ssh-host)
+     - ssh host options (add-local-host, set-local-host, add-ssh-host, set-ssh-host)
 	auth_key=<key>				use <key> as public auth key on the remote host
 	priv_key=<key>				use <key> as private host key on the remote host (default: generate a new key)
 	interface=<name>			use <name> as interface in /etc/config/network on the remote host
@@ -249,7 +251,7 @@ function key_arg(file, net_data) {
 	return `-K ${file}.key`;
 }
 
-function sync_ssh_host(host, net_data) {
+function sync_host(host, net_data) {
 	let interface = args.interface ?? "unet";
 	let connect = replace(args.connect ?? "", ",", " ");
 	let auth_key = args.auth_key ?? net_data.config.id;
@@ -287,7 +289,8 @@ function sync_ssh_host(host, net_data) {
 	fh.seek();
 
 	let fh2 = mkstemp();
-	system(`ssh ${host} sh <&${fh.fileno()} >&${fh2.fileno()}`);
+	let ssh = host ? "ssh " + host : "";
+	system(`${ssh} sh <&${fh.fileno()} >&${fh2.fileno()}`);
 	fh.close();
 
 	let data = {}, line;
@@ -322,7 +325,7 @@ if (command == "import") {
 	assert(import_file, "Missing import file argument");
 }
 
-if (command in [ "add-host", "set-host", "add-ssh-host", "set-ssh-host" ]) {
+if (command in [ "add-host", "set-host", "add-local-host", "set-local-host", "add-ssh-host", "set-ssh-host" ]) {
 	hostname = shift(ARGV);
 	assert(hostname, "Missing host name argument");
 }
@@ -368,8 +371,13 @@ if (command == "create") {
 	}
 }
 
+if (command in [ "add-local-host", "set-local-host" ]) {
+	sync_host(null, net_data);
+	command = replace(command, "local-", "");
+}
+
 if (command in [ "add-ssh-host", "set-ssh-host" ]) {
-	sync_ssh_host(ssh_host, net_data);
+	sync_host(ssh_host, net_data);
 	command = replace(command, "ssh-", "");
 }
 
