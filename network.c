@@ -519,7 +519,7 @@ static void network_reload(struct uloop_timeout *t)
 	network_do_update(net, true);
 	network_pex_open(net);
 	network_stun_start(net);
-	unetd_ubus_notify(net);
+	unetd_ubus_network_notify(net);
 }
 
 void network_soft_reload(struct network *net)

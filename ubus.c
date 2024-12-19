@@ -335,7 +335,7 @@ static void unetd_ubus_procd_update(void)
 	ubus_invoke(&conn.ctx, id, "set", b.head, NULL, NULL, -1);
 }
 
-void unetd_ubus_notify(struct network *net)
+void unetd_ubus_network_notify(struct network *net)
 {
 	blob_buf_init(&b, 0);
 	blobmsg_add_string(&b, "network", network_name(net));

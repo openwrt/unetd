@@ -7,14 +7,14 @@
 
 #ifdef UBUS_SUPPORT
 void unetd_ubus_init(void);
-void unetd_ubus_notify(struct network *net);
+void unetd_ubus_network_notify(struct network *net);
 void unetd_ubus_netifd_update(struct blob_attr *data);
 void unetd_ubus_netifd_add_route(struct network *net, union network_endpoint *ep);
 #else
 static inline void unetd_ubus_init(void)
 {
 }
-static inline void unetd_ubus_notify(struct network *net)
+static inline void unetd_ubus_network_notify(struct network *net)
 {
 }
 static inline void unetd_ubus_netifd_update(struct blob_attr *data)
