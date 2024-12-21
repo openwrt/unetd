@@ -12,6 +12,7 @@
 #include <libubox/utils.h>
 #include <libubox/blobmsg_json.h>
 #include "unetd.h"
+#include "enroll.h"
 
 enum {
 	NETDATA_ATTR_CONFIG,
@@ -561,6 +562,7 @@ static int network_setup(struct network *net)
 
 static void network_teardown(struct network *net)
 {
+	enroll_net_cleanup(net);
 	uloop_timeout_cancel(&net->connect_timer);
 	uloop_timeout_cancel(&net->reload_timer);
 	network_do_update(net, false);

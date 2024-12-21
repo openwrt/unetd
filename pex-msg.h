@@ -25,6 +25,7 @@ enum pex_opcode {
 	PEX_MSG_UPDATE_RESPONSE_NO_DATA,
 	PEX_MSG_ENDPOINT_NOTIFY,
 	PEX_MSG_ENDPOINT_PORT_NOTIFY,
+	PEX_MSG_ENROLL,
 };
 
 #define PEX_ID_LEN		8
@@ -116,6 +117,7 @@ struct pex_hdr *__pex_msg_init_ext(const uint8_t *pubkey, const uint8_t *auth_ke
 				   uint8_t opcode, bool ext);
 int __pex_msg_send(int fd, const void *addr, void *ip_hdr, size_t ip_hdrlen);
 void *pex_msg_append(size_t len);
+void *pex_msg_tail(void);
 
 struct pex_update_request *
 pex_msg_update_request_init(const uint8_t *pubkey, const uint8_t *priv_key,

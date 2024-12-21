@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Copyright (C) 2022 Felix Fietkau <nbd@nbd.name>
+ * Copyright (C) 2022-2024 Felix Fietkau <nbd@nbd.name>
  */
 #include <arpa/inet.h>
 #include <libubus.h>
 #include "unetd.h"
+#include "enroll.h"
 
 static struct ubus_auto_conn conn;
 static struct blob_buf b;
@@ -263,6 +264,155 @@ ubus_reload(struct ubus_context *ctx, struct ubus_object *obj,
 	return 0;
 }
 
+static int
+ubus_enroll_start(struct ubus_context *ctx, struct ubus_object *obj,
+		  struct ubus_request_data *req, const char *method,
+		  struct blob_attr *msg)
+{
+	return enroll_start(msg);
+}
+
+static int
+ubus_enroll_stop(struct ubus_context *ctx, struct ubus_object *obj,
+		 struct ubus_request_data *req, const char *method,
+		 struct blob_attr *msg)
+{
+	enroll_stop();
+	return 0;
+}
+
+enum {
+	ENROLL_PEER_ATTR_ID,
+	ENROLL_PEER_ATTR_SESSION,
+	ENROLL_PEER_ATTR_INFO,
+	__ENROLL_PEER_ATTR_MAX,
+};
+
+static const struct blobmsg_policy enroll_peer_policy[__ENROLL_PEER_ATTR_MAX] = {
+	[ENROLL_PEER_ATTR_ID] = { "id", BLOBMSG_TYPE_STRING },
+	[ENROLL_PEER_ATTR_SESSION] = { "session", BLOBMSG_TYPE_STRING },
+	[ENROLL_PEER_ATTR_INFO] = { "info", BLOBMSG_TYPE_TABLE },
+};
+
+struct enroll_peer_select {
+	uint8_t id[CURVE25519_KEY_SIZE];
+	uint32_t session;
+	bool has_session, has_id;
+};
+
+static int
+ubus_enroll_parse(struct enroll_peer_select *sel, struct blob_attr **tb)
+{
+	struct blob_attr *cur;
+
+	if ((cur = tb[ENROLL_PEER_ATTR_ID]) != NULL) {
+		char *str = blobmsg_get_string(cur);
+
+		if (b64_decode(str, sel->id, sizeof(sel->id)) != CURVE25519_KEY_SIZE)
+			return -1;
+
+		sel->has_id = true;
+	}
+
+	if ((cur = tb[ENROLL_PEER_ATTR_SESSION]) != NULL) {
+		char *str = blobmsg_get_string(cur);
+		uint32_t id;
+		char *err;
+
+		id = strtoul(str, &err, 16);
+		if (*err)
+			return -1;
+
+		sel->session = cpu_to_be32(id);
+		sel->has_session = true;
+	}
+
+	return 0;
+}
+
+static bool
+ubus_enroll_match(struct enroll_peer_select *sel, struct enroll_peer *peer)
+{
+	if (sel->has_id &&
+	    memcmp(peer->pubkey, sel->id, sizeof(sel->id)) != 0)
+		return false;
+	if (sel->has_session &&
+	    memcmp(peer->session_id, &sel->session, sizeof(sel->session)) != 0)
+		return false;
+	return true;
+}
+
+static int
+ubus_enroll_status(struct ubus_context *ctx, struct ubus_object *obj,
+		   struct ubus_request_data *req, const char *method,
+		   struct blob_attr *msg)
+{
+	struct blob_attr *tb[__ENROLL_PEER_ATTR_MAX];
+	struct enroll_state *state = enroll_state();
+	struct enroll_peer_select sel = {};
+	struct enroll_peer *peer;
+	void *a, *c;
+
+	if (!state)
+		return UBUS_STATUS_NO_DATA;
+
+	blobmsg_parse_attr(enroll_peer_policy, __ENROLL_PEER_ATTR_MAX, tb, msg);
+	if (ubus_enroll_parse(&sel, tb))
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	blob_buf_init(&b, 0);
+
+	a = blobmsg_open_array(&b, "peers");
+	avl_for_each_element(&state->peers, peer, node) {
+		if (!ubus_enroll_match(&sel, peer))
+			continue;
+
+		c = blobmsg_open_table(&b, NULL);
+		enroll_peer_info(&b, peer);
+		blobmsg_close_table(&b, c);
+	}
+	blobmsg_close_array(&b, a);
+
+	ubus_send_reply(ctx, req, b.head);
+
+	return 0;
+}
+
+static int
+ubus_enroll_accept(struct ubus_context *ctx, struct ubus_object *obj,
+		   struct ubus_request_data *req, const char *method,
+		   struct blob_attr *msg)
+{
+	struct blob_attr *tb[__ENROLL_PEER_ATTR_MAX];
+	struct enroll_state *state = enroll_state();
+	struct enroll_peer *peer = NULL, *cur;
+	struct enroll_peer_select sel = {};
+
+	if (!state)
+		return UBUS_STATUS_NO_DATA;
+
+	blobmsg_parse_attr(enroll_peer_policy, __ENROLL_PEER_ATTR_MAX, tb, msg);
+	if (ubus_enroll_parse(&sel, tb))
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	if (!sel.has_id && !sel.has_session)
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	avl_for_each_element(&state->peers, cur, node) {
+		if (!ubus_enroll_match(&sel, cur))
+			continue;
+		if (peer)
+			return UBUS_STATUS_NOT_FOUND;
+		peer = cur;
+	}
+
+	if (!peer)
+		return UBUS_STATUS_NOT_FOUND;
+
+	enroll_peer_accept(peer, tb[ENROLL_PEER_ATTR_INFO]);
+
+	return 0;
+}
 
 static const struct ubus_method unetd_methods[] = {
 	UBUS_METHOD("network_add", ubus_network_add, network_policy),
@@ -273,6 +423,12 @@ static const struct ubus_method unetd_methods[] = {
 	UBUS_METHOD("network_connect", ubus_network_connect, connect_policy),
 	UBUS_METHOD_NOARG("reload", ubus_reload),
 	UBUS_METHOD("service_get", ubus_service_get, service_policy),
+	UBUS_METHOD("enroll_start", ubus_enroll_start, enroll_start_policy),
+	UBUS_METHOD_MASK("enroll_status", ubus_enroll_status, enroll_peer_policy,
+			(1 << ENROLL_PEER_ATTR_ID) |
+			(1 << ENROLL_PEER_ATTR_SESSION)),
+	UBUS_METHOD("enroll_accept", ubus_enroll_accept, enroll_peer_policy),
+	UBUS_METHOD_NOARG("enroll_stop", ubus_enroll_stop),
 };
 
 static struct ubus_object_type unetd_object_type =
@@ -335,11 +491,16 @@ static void unetd_ubus_procd_update(void)
 	ubus_invoke(&conn.ctx, id, "set", b.head, NULL, NULL, -1);
 }
 
+void unetd_ubus_notify(const char *type, struct blob_attr *data)
+{
+	ubus_notify(&conn.ctx, &unetd_object, type, data, -1);
+}
+
 void unetd_ubus_network_notify(struct network *net)
 {
 	blob_buf_init(&b, 0);
 	blobmsg_add_string(&b, "network", network_name(net));
-	ubus_notify(&conn.ctx, &unetd_object, "network_update", b.head, -1);
+	unetd_ubus_notify("network_update", b.head);
 	unetd_ubus_procd_update();
 }
 

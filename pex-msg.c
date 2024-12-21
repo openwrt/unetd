@@ -123,6 +123,13 @@ struct pex_hdr *__pex_msg_init_ext(const uint8_t *pubkey, const uint8_t *auth_ke
 	return hdr;
 }
 
+void *pex_msg_tail(void)
+{
+	struct pex_hdr *hdr = (struct pex_hdr *)pex_tx_buf;
+
+	return &pex_tx_buf[hdr->len + sizeof(struct pex_hdr)];
+}
+
 void *pex_msg_append(size_t len)
 {
 	struct pex_hdr *hdr = (struct pex_hdr *)pex_tx_buf;

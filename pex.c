@@ -14,6 +14,7 @@
 #include <inttypes.h>
 #include "unetd.h"
 #include "pex-msg.h"
+#include "enroll.h"
 
 static const char *pex_peer_id_str(const uint8_t *key)
 {
@@ -928,7 +929,7 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 	struct pex_hdr *hdr;
 	struct pex_ext_hdr *ehdr;
 	struct network_peer *peer;
-	struct network *net;
+	struct network *net = NULL;
 	char buf[INET6_ADDRSTRLEN];
 	void *data;
 	int addr_len;
@@ -949,13 +950,15 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 	if (hdr->version != 0)
 		return;
 
-	net = global_pex_find_network(ehdr->auth_id);
-	if (!net || net->config.type != NETWORK_TYPE_DYNAMIC)
-		return;
+	if (hdr->opcode != PEX_MSG_ENROLL) {
+		net = global_pex_find_network(ehdr->auth_id);
+		if (!net || net->config.type != NETWORK_TYPE_DYNAMIC)
+			return;
 
-	*(uint64_t *)hdr->id ^= pex_network_hash(net->config.auth_key, ehdr->nonce);
+		*(uint64_t *)hdr->id ^= pex_network_hash(net->config.auth_key, ehdr->nonce);
 
-	global_pex_set_active(net, addr);
+		global_pex_set_active(net, addr);
+	}
 
 	D("PEX global rx op=%d", hdr->opcode);
 	switch (hdr->opcode) {
@@ -1001,6 +1004,9 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 			if (net->pex.num_hosts < NETWORK_PEX_HOSTS_LIMIT)
 				network_pex_create_host(net, &host_ep, 120);
 		}
+		break;
+	case PEX_MSG_ENROLL:
+		pex_enroll_recv(data, hdr->len, addr);
 		break;
 	}
 }
