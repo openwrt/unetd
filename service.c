@@ -54,6 +54,7 @@ __service_parse_members(struct network *net, struct network_service *s,
 {
 	struct network_group *group;
 	struct network_host *host;
+	unsigned int count = 0;
 
 	if (name[0] != '@') {
 		host = avl_find_element(&net->hosts, name, host, node);
@@ -68,6 +69,15 @@ __service_parse_members(struct network *net, struct network_service *s,
 	}
 
 	name++;
+	if (!name[0]) {
+		avl_for_each_element(&net->hosts, host, node) {
+			if (s)
+				__service_add_member(s->members, &s->n_members, host);
+			count++;
+		}
+		return count;
+	}
+
 	group = avl_find_element(&net->groups, name, group, node);
 	if (!group)
 		return 0;
