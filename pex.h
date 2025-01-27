@@ -18,6 +18,7 @@ struct network_pex_host {
 	uint64_t timeout;
 	uint64_t last_active;
 	uint64_t last_ping;
+	bool interface;
 	union network_endpoint endpoint;
 };
 
@@ -76,11 +77,13 @@ void network_pex_init(struct network *net);
 int network_pex_open(struct network *net);
 void network_pex_close(struct network *net);
 void network_pex_free(struct network *net);
+void network_pex_reload();
 
 void network_pex_event(struct network *net, struct network_peer *peer,
 		       enum pex_event ev);
-void network_pex_create_host(struct network *net, union network_endpoint *ep,
-			     unsigned int timeout);
+struct network_pex_host *
+network_pex_create_host(struct network *net, union network_endpoint *ep,
+			unsigned int timeout);
 
 void network_stun_init(struct network *net);
 void network_stun_free(struct network *net);

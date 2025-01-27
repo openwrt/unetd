@@ -8,6 +8,7 @@
 #include "enroll.h"
 
 static struct ubus_auto_conn conn;
+static struct ubus_subscriber sub;
 static struct blob_buf b;
 
 static int
@@ -446,6 +447,7 @@ ubus_connect_handler(struct ubus_context *ctx)
 {
 	int ret;
 
+	ubus_register_subscriber(ctx, &sub);
 	ret = ubus_add_object(ctx, &unetd_object);
 	if (ret)
 		fprintf(stderr, "Failed to add object: %s\n", ubus_strerror(ret));
@@ -514,6 +516,47 @@ void unetd_ubus_netifd_update(struct blob_attr *data)
 	ubus_invoke(&conn.ctx, id, "notify_proto", data, NULL, NULL, 5000);
 }
 
+static void
+ubus_network_status_cb(struct ubus_request *req, int type, struct blob_attr *msg)
+{
+	static const struct blobmsg_policy policy =
+		{ "ipv4-address", BLOBMSG_TYPE_ARRAY };
+	struct blob_attr *attr, *cur;
+	size_t rem;
+
+	blobmsg_parse_attr(&policy, 1, &attr, msg);
+	if (!attr)
+		return;
+
+	if (blobmsg_check_array(attr, BLOBMSG_TYPE_TABLE) < 0)
+		return;
+
+	blobmsg_for_each_attr(cur, attr, rem)
+		blobmsg_add_blob(&b, cur);
+}
+
+struct blob_attr *unetd_ubus_get_network_addr_list(const char *name)
+{
+	char *objname;
+	uint32_t id;
+	size_t len;
+
+	if (strlen(name) > 64)
+		return NULL;
+
+	len = sizeof("network.interface.") + strlen(name) + 1;
+	objname = alloca(len);
+	snprintf(objname, len, "network.interface.%s", name);
+
+	if (ubus_lookup_id(&conn.ctx, objname, &id))
+		return NULL;
+
+	blob_buf_init(&b, 0);
+	ubus_invoke(&conn.ctx, id, "status", b.head, ubus_network_status_cb, NULL, 10000);
+
+	return b.head;
+}
+
 void unetd_ubus_netifd_add_route(struct network *net, union network_endpoint *ep)
 {
 	uint32_t id;
@@ -543,8 +586,25 @@ void unetd_ubus_netifd_add_route(struct network *net, union network_endpoint *ep
 	ubus_invoke(&conn.ctx, id, "add_host_route", b.head, NULL, NULL, -1);
 }
 
+static int
+unetd_netifd_sub_cb(struct ubus_context *ctx, struct ubus_object *obj,
+		    struct ubus_request_data *req,
+		    const char *method, struct blob_attr *msg)
+{
+	network_pex_reload();
+	return 0;
+}
+
+static bool
+unetd_new_object_sub_cb(struct ubus_context *ctx, struct ubus_subscriber *sub, const char *path)
+{
+	return path && !strcmp(path, "network.interface");
+}
+
 void unetd_ubus_init(void)
 {
+	sub.cb = unetd_netifd_sub_cb;
+	sub.new_obj_cb = unetd_new_object_sub_cb;
 	conn.cb = ubus_connect_handler;
 	ubus_auto_connect(&conn);
 }

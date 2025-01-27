@@ -57,6 +57,7 @@ const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 	[NETWORK_ATTR_DOMAIN] = { "domain", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_UPDATE_CMD] = { "update-cmd", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_TUNNELS] = { "tunnels", BLOBMSG_TYPE_TABLE },
+	[NETWORK_ATTR_LOCAL_NET] = { "local_network", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_ATTR_AUTH_CONNECT] = { "auth_connect", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_ATTR_PEER_DATA] = { "peer_data", BLOBMSG_TYPE_ARRAY },
 };
@@ -655,6 +656,10 @@ network_set_config(struct network *net, struct blob_attr *config)
 
 	if ((cur = tb[NETWORK_ATTR_TUNNELS]) != NULL)
 		net->config.tunnels = cur;
+
+	if ((cur = tb[NETWORK_ATTR_LOCAL_NET]) != NULL &&
+	    blobmsg_check_array(cur, BLOBMSG_TYPE_STRING) > 0)
+		net->config.local_network = cur;
 
 	if ((cur = tb[NETWORK_ATTR_AUTH_CONNECT]) != NULL &&
 	    blobmsg_check_array(cur, BLOBMSG_TYPE_STRING) > 0)

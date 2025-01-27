@@ -37,6 +37,7 @@ struct network {
 		const char *domain;
 		struct blob_attr *tunnels;
 		struct blob_attr *net_data;
+		struct blob_attr *local_network;
 		struct blob_attr *auth_connect;
 		struct blob_attr *peer_data;
 	} config;
@@ -87,6 +88,7 @@ enum {
 	NETWORK_ATTR_KEEPALIVE,
 	NETWORK_ATTR_DOMAIN,
 	NETWORK_ATTR_TUNNELS,
+	NETWORK_ATTR_LOCAL_NET,
 	NETWORK_ATTR_AUTH_CONNECT,
 	NETWORK_ATTR_PEER_DATA,
 	__NETWORK_ATTR_MAX,

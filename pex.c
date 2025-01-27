@@ -740,8 +740,9 @@ network_pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 	}
 }
 
-void network_pex_create_host(struct network *net, union network_endpoint *ep,
-			     unsigned int timeout)
+struct network_pex_host *
+network_pex_create_host(struct network *net, union network_endpoint *ep,
+			unsigned int timeout)
 {
 	struct network_pex *pex = &net->pex;
 	struct network_pex_host *host;
@@ -768,6 +769,7 @@ void network_pex_create_host(struct network *net, union network_endpoint *ep,
 out:
 	if (timeout && (new_host || host->timeout))
 		host->timeout = timeout + unet_gettime();
+	return host;
 }
 
 static void
@@ -812,6 +814,84 @@ network_pex_open_auth_connect(struct network *net)
 }
 
 
+static void
+__network_pex_reload_iface(struct network *net, struct blob_attr *data)
+{
+	static const struct blobmsg_policy policy[] = {
+		{ "address", BLOBMSG_TYPE_STRING },
+		{ "mask", BLOBMSG_TYPE_INT32 },
+	};
+	struct network_pex_host *host;
+	struct blob_attr *tb[2], *cur;
+	size_t rem;
+
+	if (!data)
+		return;
+
+	blobmsg_for_each_attr(cur, data, rem) {
+		union network_endpoint ep = {};
+		uint32_t mask;
+
+		blobmsg_parse_attr(policy, ARRAY_SIZE(policy), tb, cur);
+		if (!tb[0] || !tb[1])
+			continue;
+
+		mask = blobmsg_get_u32(tb[1]);
+		if (mask >= 31 || !mask)
+			continue;
+
+		if (network_get_endpoint(&ep, AF_INET, blobmsg_get_string(tb[0]),
+					 UNETD_GLOBAL_PEX_PORT, 0) < 0)
+			continue;
+
+		*(uint32_t *)&ep.in.sin_addr |= htonl((~0U) >> mask);
+		host = network_pex_create_host(net, &ep, 0);
+		host->interface = true;
+	}
+}
+
+static void
+__network_pex_reload(struct network *net)
+{
+	struct network_pex *pex = &net->pex;
+	struct network_pex_host *host, *tmp;
+	struct blob_attr *cur;
+	size_t rem;
+
+	if (!net->config.local_network)
+		return;
+
+	list_for_each_entry_safe(host, tmp, &pex->hosts, list)
+		if (host->interface)
+			network_pex_free_host(net, host);
+
+	blobmsg_for_each_attr(cur, net->config.local_network, rem) {
+		const char *name = blobmsg_get_string(cur);
+		struct blob_attr *addrs;
+
+		addrs = unetd_ubus_get_network_addr_list(name);
+		__network_pex_reload_iface(net, addrs);
+	}
+}
+
+static void
+network_pex_reload_cb(struct uloop_timeout *t)
+{
+	struct network *net;
+
+	avl_for_each_element(&networks, net, node)
+		__network_pex_reload(net);
+}
+
+void network_pex_reload(void)
+{
+	static struct uloop_timeout timer = {
+		.cb = network_pex_reload_cb,
+	};
+
+	uloop_timeout_set(&timer, 1);
+}
+
 int network_pex_open(struct network *net)
 {
 	struct network_host *local_host = net->net_config.local_host;
@@ -822,6 +902,7 @@ int network_pex_open(struct network *net)
 	int fd;
 
 	network_pex_open_auth_connect(net);
+	__network_pex_reload(net);
 
 	if (!local_host || !local_host->peer.pex_port)
 		return 0;
