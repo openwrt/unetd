@@ -273,6 +273,9 @@ wg_linux_parse_peer(struct network *net, struct nlattr *data, time_t now)
 	if ((cur = tb[WGPEER_A_RX_BYTES]) != NULL)
 		wg_peer_set_rx_bytes(net, peer, nla_get_u64(cur));
 
+	if ((cur = tb[WGPEER_A_TX_BYTES]) != NULL)
+		wg_peer_set_tx_bytes(net, peer, nla_get_u64(cur));
+
 	if ((cur = tb[WGPEER_A_ENDPOINT]) != NULL)
 		wg_peer_set_endpoint(net, peer, nla_data(cur), nla_len(cur));
 

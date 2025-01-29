@@ -38,11 +38,12 @@ struct network_peer {
 		union network_endpoint next_endpoint[__ENDPOINT_TYPE_MAX];
 		uint64_t last_ep_update;
 
-		uint64_t rx_bytes;
+		uint64_t rx_bytes, tx_bytes;
 		uint64_t last_handshake;
 		uint64_t last_request;
 		uint64_t last_query_sent;
 
+		int last_handshake_diff;
 		int idle;
 		int num_net_queries;
 	} state;

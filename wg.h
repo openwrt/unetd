@@ -55,6 +55,8 @@ void wg_peer_set_last_handshake(struct network *net, struct network_peer *peer,
 				uint64_t now, uint64_t sec);
 void wg_peer_set_rx_bytes(struct network *net, struct network_peer *peer,
 			  uint64_t bytes);
+void wg_peer_set_tx_bytes(struct network *net, struct network_peer *peer,
+			  uint64_t bytes);
 void wg_peer_set_endpoint(struct network *net, struct network_peer *peer,
 			  void *data, size_t len);
 

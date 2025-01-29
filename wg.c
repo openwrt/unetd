@@ -69,6 +69,7 @@ void wg_peer_update_done(struct network *net, struct network_peer *peer)
 void wg_peer_set_last_handshake(struct network *net, struct network_peer *peer,
 				uint64_t now, uint64_t sec)
 {
+	peer->state.last_handshake_diff = now - sec;
 	if (sec == peer->state.last_handshake)
 		return;
 
@@ -93,6 +94,12 @@ void wg_peer_set_rx_bytes(struct network *net, struct network_peer *peer,
 		peer->state.idle = 0;
 		wg_peer_set_connected(net, peer, true);
 	}
+}
+
+void wg_peer_set_tx_bytes(struct network *net, struct network_peer *peer,
+			  uint64_t bytes)
+{
+	peer->state.tx_bytes = bytes;
 }
 
 void wg_peer_set_endpoint(struct network *net, struct network_peer *peer,

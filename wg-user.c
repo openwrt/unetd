@@ -390,6 +390,13 @@ wg_user_peer_refresh(struct network *net)
 			continue;
 		}
 
+		if (!strcmp(req.key, "tx_bytes")) {
+			uint64_t bytes = strtoull(req.value, NULL, 0);
+
+			wg_peer_set_tx_bytes(net, peer, bytes);
+			continue;
+		}
+
 		if (!strcmp(req.key, "endpoint")) {
 			struct addrinfo *resolved;
 			struct addrinfo hints = {

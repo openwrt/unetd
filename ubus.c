@@ -82,6 +82,11 @@ __network_dump(struct blob_buf *buf, struct network *net)
 			snprintf(str + len, INET6_ADDRSTRLEN + 7 - len, ":%d",
 				 ntohs(ep->in.sin_port));
 			blobmsg_add_string_buffer(buf);
+
+			blobmsg_add_u64(buf, "rx_bytes", peer->state.rx_bytes);
+			blobmsg_add_u64(buf, "tx_bytes", peer->state.tx_bytes);
+			blobmsg_add_u32(buf, "idle", peer->state.idle);
+			blobmsg_add_u32(buf, "last_handshake_sec", peer->state.last_handshake_diff);
 		}
 
 		blobmsg_close_table(buf, p);
