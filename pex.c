@@ -389,12 +389,12 @@ network_pex_query_hosts(struct network *net)
 static void
 network_pex_send_ping(struct network *net, struct network_peer *peer)
 {
-	if (peer->state.pinged || !peer->state.endpoint.sa.sa_family)
+	if (peer->state.ping_wait > 0 || !peer->state.endpoint.sa.sa_family)
 		return;
 
 	pex_msg_init(net, PEX_MSG_PING);
 	pex_msg_send(net, peer);
-	peer->state.pinged = true;
+	peer->state.ping_wait = 1 + net->net_config.keepalive / 2;
 }
 
 static void

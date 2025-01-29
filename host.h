@@ -30,7 +30,6 @@ struct network_peer {
 		bool connected;
 		bool handshake;
 		bool has_local_ep_addr;
-		bool pinged;
 		union network_addr local_ep_addr;
 		union network_endpoint endpoint;
 
@@ -43,6 +42,7 @@ struct network_peer {
 		uint64_t last_request;
 		uint64_t last_query_sent;
 
+		int ping_wait;
 		int last_handshake_diff;
 		int idle;
 		int num_net_queries;

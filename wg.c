@@ -52,6 +52,8 @@ struct network_peer *wg_peer_update_start(struct network *net, const uint8_t *ke
 
 	peer->state.handshake = false;
 	peer->state.idle++;
+	if (peer->state.ping_wait > 0)
+		peer->state.ping_wait--;
 	if (peer->state.idle >= 2 * net->net_config.keepalive)
 		wg_peer_set_connected(net, peer, false);
 	if (peer->state.idle > net->net_config.keepalive)
@@ -80,7 +82,6 @@ void wg_peer_set_last_handshake(struct network *net, struct network_peer *peer,
 		if (peer->state.idle > sec)
 			peer->state.idle = sec;
 		wg_peer_set_connected(net, peer, true);
-		peer->state.pinged = false;
 	}
 }
 
