@@ -58,9 +58,9 @@ __network_dump(struct blob_buf *buf, struct network *net)
 	void *c, *p;
 	char *str;
 
-	blobmsg_add_field(buf, BLOBMSG_TYPE_TABLE, "config",
-			  blobmsg_data(net->config.data),
-			  blobmsg_len(net->config.data));
+	c = blobmsg_open_table(buf, "config");
+	network_get_config(net, buf);
+	blobmsg_close_table(buf, c);
 
 	if (local)
 		blobmsg_add_string(buf, "local_host", network_host_name(local));

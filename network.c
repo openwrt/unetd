@@ -585,6 +585,21 @@ network_destroy(struct network *net)
 	free(net);
 }
 
+void network_get_config(struct network *net, struct blob_buf *buf)
+{
+	struct blob_attr *tb[__NETWORK_ATTR_MAX];
+
+	if (!net->config.data)
+		return;
+
+	blobmsg_parse_attr(network_policy, __NETWORK_ATTR_MAX, tb,
+			   net->config.data);
+	tb[NETWORK_ATTR_KEY] = NULL;
+	for (size_t i = 0; i < ARRAY_SIZE(tb); i++)
+		if (tb[i])
+			blobmsg_add_blob(buf, tb[i]);
+}
+
 static int
 network_set_config(struct network *net, struct blob_attr *config)
 {
@@ -600,9 +615,8 @@ network_set_config(struct network *net, struct blob_attr *config)
 	memset(&net->config, 0, sizeof(net->config));
 
 	net->config.data = blob_memdup(config);
-	blobmsg_parse(network_policy, __NETWORK_ATTR_MAX, tb,
-		      blobmsg_data(net->config.data),
-		      blobmsg_len(net->config.data));
+	blobmsg_parse_attr(network_policy, __NETWORK_ATTR_MAX, tb,
+			   net->config.data);
 
 	if ((cur = tb[NETWORK_ATTR_TYPE]) == NULL ||
 	    !strlen(blobmsg_get_string(cur)) ||
