@@ -36,7 +36,7 @@ ELSE()
 ENDIF()
 
 IF(UBUS_SUPPORT)
-  SET(SOURCES ${SOURCES} ubus.c enroll.c)
+  SET(SOURCES ${SOURCES} ubus.c enroll.c token.c)
   SET(DHT_SOURCES ${DHT_SOURCES} udht-ubus.c)
   ADD_DEFINITIONS(-DUBUS_SUPPORT=1)
   FIND_LIBRARY(ubus ubus)

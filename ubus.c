@@ -4,6 +4,7 @@
  */
 #include <arpa/inet.h>
 #include <libubus.h>
+#include <time.h>
 #include "unetd.h"
 #include "enroll.h"
 
@@ -420,6 +421,112 @@ ubus_enroll_accept(struct ubus_context *ctx, struct ubus_object *obj,
 	return 0;
 }
 
+enum {
+	TOKEN_CREATE_ATTR_NETWORK,
+	TOKEN_CREATE_ATTR_TARGET,
+	TOKEN_CREATE_ATTR_SERVICE,
+	TOKEN_CREATE_ATTR_VALIDITY,
+	TOKEN_CREATE_ATTR_DATA,
+	__TOKEN_CREATE_ATTR_MAX,
+};
+
+static const struct blobmsg_policy token_create_policy[__TOKEN_CREATE_ATTR_MAX] = {
+	[TOKEN_CREATE_ATTR_NETWORK] = { "network", BLOBMSG_TYPE_STRING },
+	[TOKEN_CREATE_ATTR_TARGET] = { "target", BLOBMSG_TYPE_STRING },
+	[TOKEN_CREATE_ATTR_SERVICE] = { "service", BLOBMSG_TYPE_STRING },
+	[TOKEN_CREATE_ATTR_DATA] = { "data", BLOBMSG_TYPE_TABLE },
+};
+
+static int
+ubus_token_create(struct ubus_context *ctx, struct ubus_object *obj,
+	       struct ubus_request_data *req, const char *method,
+	       struct blob_attr *msg)
+{
+	struct blob_attr *tb[__TOKEN_CREATE_ATTR_MAX], *cur;
+	struct network_host *target = NULL;
+	struct network *net = NULL;
+	const char *service = NULL;
+	char *str_buf;
+	void *token;
+	size_t len;
+
+	blobmsg_parse_attr(token_create_policy, __TOKEN_CREATE_ATTR_MAX, tb, msg);
+
+	if ((cur = tb[TOKEN_CREATE_ATTR_NETWORK]) != NULL)
+		net = avl_find_element(&networks, blobmsg_get_string(cur), net, node);
+	else
+		return UBUS_STATUS_INVALID_ARGUMENT;
+	if (!net)
+		return UBUS_STATUS_NOT_FOUND;
+
+	if ((cur = tb[TOKEN_CREATE_ATTR_TARGET]) != NULL)
+		target = avl_find_element(&net->hosts, blobmsg_get_string(cur), target, node);
+	else
+		return UBUS_STATUS_INVALID_ARGUMENT;
+	if (!target)
+		return UBUS_STATUS_NOT_FOUND;
+
+	blob_buf_init(&b, 0);
+	blobmsg_add_u64(&b, "created", time(NULL));
+	if (req->acl.user)
+		blobmsg_add_string(&b, "user", req->acl.user);
+	if (req->acl.group)
+		blobmsg_add_string(&b, "group", req->acl.group);
+	if ((cur = tb[TOKEN_CREATE_ATTR_SERVICE]) != NULL) {
+		service = blobmsg_get_string(cur);
+		blobmsg_add_blob(&b, cur);
+	}
+	if ((cur = tb[TOKEN_CREATE_ATTR_DATA]) != NULL)
+		blobmsg_add_blob(&b, cur);
+
+	token = token_create(net, target, service, b.head, &len);
+	if (!token)
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	blob_buf_init(&b, 0);
+	str_buf = blobmsg_alloc_string_buffer(&b, "token", B64_ENCODE_LEN(len));
+	b64_encode(token, len, str_buf, B64_ENCODE_LEN(len));
+	blobmsg_add_string_buffer(&b);
+
+	ubus_send_reply(ctx, req, b.head);
+
+	return 0;
+}
+
+enum {
+	TOKEN_PARSE_ATTR_TOKEN,
+	__TOKEN_PARSE_ATTR_MAX,
+};
+
+static const struct blobmsg_policy token_parse_policy[__TOKEN_PARSE_ATTR_MAX] = {
+	[TOKEN_PARSE_ATTR_TOKEN] = { "token", BLOBMSG_TYPE_STRING }
+};
+
+static int
+ubus_token_parse(struct ubus_context *ctx, struct ubus_object *obj,
+	       struct ubus_request_data *req, const char *method,
+	       struct blob_attr *msg)
+{
+	struct blob_attr *tb[__TOKEN_PARSE_ATTR_MAX], *cur;
+	const char *token;
+
+	blobmsg_parse_attr(token_parse_policy, __TOKEN_PARSE_ATTR_MAX, tb, msg);
+
+	if ((cur = tb[TOKEN_PARSE_ATTR_TOKEN]) != NULL)
+		token = blobmsg_get_string(cur);
+	else
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	blob_buf_init(&b, 0);
+	if (!token_parse(&b, token))
+		return UBUS_STATUS_INVALID_ARGUMENT;
+
+	ubus_send_reply(ctx, req, b.head);
+
+	return 0;
+}
+
+
 static const struct ubus_method unetd_methods[] = {
 	UBUS_METHOD("network_add", ubus_network_add, network_policy),
 	UBUS_METHOD_MASK("network_del", ubus_network_del, network_policy,
@@ -435,6 +542,8 @@ static const struct ubus_method unetd_methods[] = {
 			(1 << ENROLL_PEER_ATTR_SESSION)),
 	UBUS_METHOD("enroll_accept", ubus_enroll_accept, enroll_peer_policy),
 	UBUS_METHOD_NOARG("enroll_stop", ubus_enroll_stop),
+	UBUS_METHOD("token_create", ubus_token_create, token_create_policy),
+	UBUS_METHOD("token_parse", ubus_token_parse, token_parse_policy),
 };
 
 static struct ubus_object_type unetd_object_type =

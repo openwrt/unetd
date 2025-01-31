@@ -21,6 +21,7 @@
 #include "ubus.h"
 #include "auth-data.h"
 #include "chacha20.h"
+#include "token.h"
 
 extern const char *mssfix_path;
 extern const char *data_dir;
