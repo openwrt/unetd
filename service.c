@@ -120,7 +120,8 @@ service_add(struct network *net, struct blob_attr *data)
 	if ((cur = tb[SERVICE_ATTR_TYPE]) != NULL)
 		type = blobmsg_get_string(cur);
 
-	if (blobmsg_check_array(tb[SERVICE_ATTR_MEMBERS], BLOBMSG_TYPE_STRING) < 0)
+	if (!tb[SERVICE_ATTR_MEMBERS] ||
+	    blobmsg_check_array(tb[SERVICE_ATTR_MEMBERS], BLOBMSG_TYPE_STRING) < 0)
 		return;
 
 	config = tb[SERVICE_ATTR_CONFIG];
