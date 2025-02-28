@@ -572,7 +572,7 @@ network_pex_recv_update_request(struct network *net, struct network_peer *peer,
 
 	D("receive update request, local version=%"PRIu64", remote version=%"PRIu64, net->net_data_version, req_version);
 
-	if (req_version >= net->net_data_version) {
+	if (req_version && req_version >= net->net_data_version) {
 		struct pex_update_response_no_data *res;
 
 		pex_msg_init_ext(net, PEX_MSG_UPDATE_RESPONSE_NO_DATA, !!addr);
