@@ -64,8 +64,14 @@ __network_dump(struct blob_buf *buf, struct network *net)
 	network_get_config(net, buf);
 	blobmsg_close_table(buf, c);
 
-	if (local)
+	if (local) {
 		blobmsg_add_string(buf, "local_host", network_host_name(local));
+
+		str = blobmsg_alloc_string_buffer(buf, "local_address", INET6_ADDRSTRLEN);
+		inet_ntop(AF_INET6, &local->peer.local_addr.in6, str, INET6_ADDRSTRLEN);
+		blobmsg_add_string_buffer(buf);
+	}
+
 
 	c = blobmsg_open_table(buf, "peers");
 	vlist_for_each_element(&net->peers, peer, node) {
@@ -74,6 +80,11 @@ __network_dump(struct blob_buf *buf, struct network *net)
 		int len;
 
 		p = blobmsg_open_table(buf, network_peer_name(peer));
+
+		str = blobmsg_alloc_string_buffer(buf, "address", INET6_ADDRSTRLEN);
+		inet_ntop(AF_INET6, &peer->local_addr.in6, str, INET6_ADDRSTRLEN);
+		blobmsg_add_string_buffer(buf);
+
 		blobmsg_add_u8(buf, "connected", peer->state.connected);
 		if (peer->state.connected) {
 			str = blobmsg_alloc_string_buffer(buf, "endpoint",
