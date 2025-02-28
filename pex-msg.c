@@ -513,7 +513,7 @@ void *pex_msg_update_response_recv(const void *data, int len, enum pex_opcode op
 	} else if (op == PEX_MSG_UPDATE_RESPONSE_NO_DATA) {
 		const struct pex_update_response_no_data *res = data;
 
-		if (len < sizeof(*res))
+		if (len < sizeof(*res) || !res->cur_version)
 			return NULL;
 
 		ctx = pex_msg_update_recv_ctx_get(res->req_id);
