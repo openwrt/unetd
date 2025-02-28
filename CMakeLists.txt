@@ -40,15 +40,17 @@ IF(UBUS_SUPPORT)
   SET(DHT_SOURCES ${DHT_SOURCES} udht-ubus.c)
   ADD_DEFINITIONS(-DUBUS_SUPPORT=1)
   FIND_LIBRARY(ubus ubus)
+  FIND_LIBRARY(udebug NAMES udebug)
 ELSE()
   SET(ubus "")
+  SET(udebug "")
 ENDIF()
 
 ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c auth-data.c chacha20.c pex-msg.c utils.c stun.c)
 TARGET_LINK_LIBRARIES(unet ubox)
 
 ADD_EXECUTABLE(unetd ${SOURCES})
-TARGET_LINK_LIBRARIES(unetd unet ubox ${ubus} blobmsg_json ${libjson} ${nl} ${bpf} ${elf} ${zlib})
+TARGET_LINK_LIBRARIES(unetd unet ubox ${ubus} blobmsg_json ${libjson} ${nl} ${bpf} ${elf} ${zlib} ${udebug})
 
 ADD_EXECUTABLE(unet-tool cli.c)
 TARGET_LINK_LIBRARIES(unet-tool unet blobmsg_json ${libjson} ubox)

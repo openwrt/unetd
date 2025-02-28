@@ -19,7 +19,75 @@ static const char *hosts_file;
 const char *mssfix_path = UNETD_MSS_BPF_PATH;
 const char *data_dir = UNETD_DATA_DIR;
 int global_pex_port = UNETD_GLOBAL_PEX_PORT;
-bool debug;
+
+static bool debug;
+
+#ifdef UBUS_SUPPORT
+static struct udebug ud;
+static struct udebug_buf udb_log;
+
+static const struct udebug_buf_meta meta_log = {
+	.name = "log",
+	.format = UDEBUG_FORMAT_STRING
+};
+
+static struct udebug_ubus_ring rings[] = {
+	{
+		.buf = &udb_log,
+		.meta = &meta_log,
+		.default_entries = 1024,
+		.default_size = 64 * 1024,
+	}
+};
+#endif
+
+bool unetd_debug_active(void)
+{
+#ifdef UBUS_SUPPORT
+	if (udebug_buf_valid(&udb_log))
+		return true;
+#endif
+	return debug;
+}
+
+static void __attribute__((format (printf, 1, 0)))
+unetd_udebug_vprintf(const char *format, va_list ap)
+{
+#ifdef UBUS_SUPPORT
+	if (!udebug_buf_valid(&udb_log))
+		return;
+
+	udebug_entry_init(&udb_log);
+	udebug_entry_vprintf(&udb_log, format, ap);
+	udebug_entry_add(&udb_log);
+#endif
+}
+
+void unetd_debug_printf(const char *format, ...)
+{
+	va_list ap;
+
+	va_start(ap, format);
+
+	if (debug) {
+		va_list ap2;
+
+		va_copy(ap2, ap);
+		vfprintf(stderr, format, ap2);
+		va_end(ap2);
+	}
+
+	unetd_udebug_vprintf(format, ap);
+	va_end(ap);
+}
+
+#ifdef UBUS_SUPPORT
+void unetd_udebug_config(struct udebug_ubus *ctx, struct blob_attr *data,
+			 bool enabled)
+{
+	udebug_ubus_apply_config(&ud, rings, ARRAY_SIZE(rings), data, enabled);
+}
+#endif
 
 static void
 network_write_hosts(struct network *net, FILE *f)
@@ -134,6 +202,13 @@ int main(int argc, char **argv)
 	}
 
 	uloop_init();
+#ifdef UBUS_SUPPORT
+	udebug_init(&ud);
+	udebug_auto_connect(&ud, NULL);
+	for (size_t i = 0; i < ARRAY_SIZE(rings); i++)
+		udebug_ubus_ring_init(&ud, &rings[i]);
+#endif
+
 	unetd_ubus_init();
 	unetd_write_hosts();
 	global_pex_open(unix_socket);

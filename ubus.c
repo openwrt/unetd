@@ -11,6 +11,7 @@
 static struct ubus_auto_conn conn;
 static struct ubus_subscriber sub;
 static struct blob_buf b;
+static struct udebug_ubus udebug;
 
 static int
 ubus_network_add(struct ubus_context *ctx, struct ubus_object *obj,
@@ -561,6 +562,7 @@ ubus_connect_handler(struct ubus_context *ctx)
 {
 	int ret;
 
+	udebug_ubus_init(&udebug, ctx, "unetd", unetd_udebug_config);
 	ubus_register_subscriber(ctx, &sub);
 	ret = ubus_add_object(ctx, &unetd_object);
 	if (ret)

@@ -459,7 +459,7 @@ network_do_update(struct network *net, bool up)
 		network_fill_subnets(net, &b);
 	}
 
-	if (debug) {
+	if (unetd_debug_active()) {
 		char *s = blobmsg_format_json(b.head, true);
 		D_NET(net, "update: %s", s);
 		free(s);

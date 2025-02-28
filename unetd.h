@@ -10,6 +10,9 @@
 #include <libubox/vlist.h>
 #include <libubox/blobmsg.h>
 #include <libubox/utils.h>
+#ifdef UBUS_SUPPORT
+#include <udebug.h>
+#endif
 #include "utils.h"
 #include "siphash.h"
 #include "wg.h"
@@ -25,14 +28,18 @@
 
 extern const char *mssfix_path;
 extern const char *data_dir;
-extern bool debug;
 extern int global_pex_port;
+bool unetd_debug_active(void);
+void unetd_debug_printf(const char *format, ...);
+#ifdef UBUS_SUPPORT
+void unetd_udebug_config(struct udebug_ubus *ctx, struct blob_attr *data,
+			 bool enabled);
+#endif
 
-#define D(format, ...)								\
-	do {									\
-		if (debug)							\
-			fprintf(stderr, "%s(%d) " format "\n",			\
-				__func__, __LINE__, ##__VA_ARGS__);		\
+#define D(format, ...)							\
+	do {								\
+		unetd_debug_printf("%s(%d) " format "\n",		\
+				   __func__, __LINE__, ##__VA_ARGS__);	\
 	} while (0)
 
 #define D_NET(net, format, ...)	D("network %s " format, network_name(net), ##__VA_ARGS__)
