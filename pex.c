@@ -1015,6 +1015,9 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 	void *data;
 	int addr_len;
 	int ep_idx = ENDPOINT_TYPE_ENDPOINT_NOTIFY;
+	union network_endpoint host_ep = {
+		.in6 = *addr
+	};
 
 	if (stun_msg_is_valid(msg, msg_len)) {
 		avl_for_each_element(&networks, net, node)
@@ -1055,6 +1058,9 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 						addr);
 		break;
 	case PEX_MSG_UPDATE_RESPONSE:
+		if (net->pex.num_hosts < NETWORK_PEX_HOSTS_LIMIT)
+			network_pex_create_host(net, &host_ep, 20);
+		fallthrough;
 	case PEX_MSG_UPDATE_RESPONSE_DATA:
 	case PEX_MSG_UPDATE_RESPONSE_NO_DATA:
 		network_pex_recv_update_response(net, data, hdr->len, addr, hdr->opcode);
@@ -1077,9 +1083,6 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 		memcpy(&peer->state.next_endpoint[ep_idx], addr, sizeof(*addr));
 		if (hdr->opcode == PEX_MSG_ENDPOINT_PORT_NOTIFY) {
 			struct pex_endpoint_port_notify *port = data;
-			union network_endpoint host_ep = {
-				.in6 = *addr
-			};
 
 			peer->state.next_endpoint[ep_idx].in.sin_port = port->port;
 			if (net->pex.num_hosts < NETWORK_PEX_HOSTS_LIMIT)
