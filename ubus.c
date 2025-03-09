@@ -56,8 +56,9 @@ static void
 __network_dump(struct blob_buf *buf, struct network *net)
 {
 	struct network_host *local = net->net_config.local_host;
+	struct network_service *s;
 	struct network_peer *peer;
-	void *c, *p;
+	void *c, *p, *m;
 	char *str;
 
 	c = blobmsg_open_table(buf, "config");
@@ -102,6 +103,25 @@ __network_dump(struct blob_buf *buf, struct network *net)
 			blobmsg_add_u32(buf, "last_handshake_sec", peer->state.last_handshake_diff);
 		}
 
+		blobmsg_close_table(buf, p);
+	}
+	blobmsg_close_table(buf, c);
+
+
+	c = blobmsg_open_table(buf, "services");
+	vlist_for_each_element(&net->services, s, node) {
+		p = blobmsg_open_table(buf, network_service_name(s));
+
+		if (s->type)
+			blobmsg_add_string(buf, "type", s->type);
+
+		m = blobmsg_open_array(buf, "members");
+		for (size_t i = 0; i < s->n_members; i++)
+			blobmsg_add_string(buf, NULL, network_host_name(s->members[i]));
+		blobmsg_close_array(buf, m);
+
+		if (s->config)
+			blobmsg_add_blob(buf, s->config);
 		blobmsg_close_table(buf, p);
 	}
 	blobmsg_close_table(buf, c);
