@@ -28,6 +28,7 @@
 static uint8_t peerkey[EDSIGN_PUBLIC_KEY_SIZE];
 static uint8_t pubkey[EDSIGN_PUBLIC_KEY_SIZE];
 static uint8_t seckey[EDSIGN_PUBLIC_KEY_SIZE];
+static uint8_t xorkey[EDSIGN_PUBLIC_KEY_SIZE];
 static void *net_data;
 static size_t net_data_len;
 static uint64_t net_data_version;
@@ -37,7 +38,7 @@ static struct blob_buf b;
 static FILE *out_file;
 static bool quiet;
 static bool sync_done;
-static bool has_key;
+static bool has_key, has_xor;
 static int password_prompt;
 static enum {
 	CMD_UNKNOWN,
@@ -92,6 +93,7 @@ static int usage(const char *progname)
 		"				(passphrase is read from stdin)\n"
 		"	-p			Prompt for seed password\n"
 		"	-b <file>:		Read signed network data file\n"
+		"	-x <file>|-:		Apply extra key using XOR\n"
 		"\n", progname);
 	return 1;
 }
@@ -434,13 +436,13 @@ static int cmd_pubkey(int argc, char **argv)
 	return 0;
 }
 
-static int cmd_generate(int argc, char **argv)
+static int generate_key(void)
 {
 	FILE *f;
 	int ret;
 
 	if (has_key)
-		goto out;
+		return 0;
 
 	f = fopen("/dev/urandom", "r");
 	if (!f) {
@@ -457,8 +459,13 @@ static int cmd_generate(int argc, char **argv)
 	}
 
 	ed25519_prepare(seckey);
+	has_key = true;
 
-out:
+	return 0;
+}
+
+static int cmd_generate(int argc, char **argv)
+{
 	print_key(seckey);
 
 	return 0;
@@ -627,7 +634,7 @@ int main(int argc, char **argv)
 	bool has_peerkey = false;
 	int ret, ch;
 
-	while ((ch = getopt(argc, argv, "b:h:k:K:o:qD:GHpPs:STU:V")) != -1) {
+	while ((ch = getopt(argc, argv, "b:h:k:K:o:qD:GHpPs:STU:Vx:")) != -1) {
 		switch (ch) {
 		case 'D':
 		case 'U':
@@ -696,6 +703,12 @@ int main(int argc, char **argv)
 
 			has_pubkey = true;
 			break;
+		case 'x':
+			if (!parse_key(xorkey, optarg))
+				return 1;
+
+			has_xor = true;
+			break;
 		case 'U':
 			cmd = CMD_UPLOAD;
 			cmd_arg = optarg;
@@ -727,7 +740,13 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (cmd == CMD_GENERATE && generate_key())
+		return 1;
+
 	if (has_key) {
+		if (has_xor)
+			for (size_t i = 0; i < ARRAY_SIZE(seckey); i++)
+				seckey[i] ^= xorkey[i];
 		edsign_sec_to_pub(pubkey, seckey);
 		has_pubkey = true;
 	}
