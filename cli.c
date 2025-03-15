@@ -655,9 +655,8 @@ int main(int argc, char **argv)
 			if (has_peerkey)
 				return usage(progname);
 
-			if (!parse_key(peerkey, optarg)) {
+			if (!parse_key(peerkey, optarg))
 				return 1;
-			}
 
 			has_peerkey = true;
 			break;
@@ -669,16 +668,13 @@ int main(int argc, char **argv)
 				return 1;
 
 			has_key = true;
-			edsign_sec_to_pub(pubkey, seckey);
-			has_pubkey = true;
 			break;
 		case 'k':
 			if (has_pubkey)
 				return usage(progname);
 
-			if (!parse_key(pubkey, optarg)) {
+			if (!parse_key(pubkey, optarg))
 				return 1;
-			}
 
 			has_pubkey = true;
 			break;
@@ -686,14 +682,10 @@ int main(int argc, char **argv)
 			if (has_pubkey)
 				return usage(progname);
 
-			if (!parse_key(seckey, optarg)) {
+			if (!parse_key(seckey, optarg))
 				return 1;
-			}
 
 			has_key = true;
-
-			edsign_sec_to_pub(pubkey, seckey);
-			has_pubkey = true;
 			break;
 		case 'p':
 			password_prompt++;
@@ -733,6 +725,11 @@ int main(int argc, char **argv)
 		default:
 			return usage(progname);
 		}
+	}
+
+	if (has_key) {
+		edsign_sec_to_pub(pubkey, seckey);
+		has_pubkey = true;
 	}
 
 	if (!has_peerkey && cmd_needs_peerkey()) {
