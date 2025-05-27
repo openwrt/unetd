@@ -57,6 +57,7 @@ struct network {
 	size_t net_data_len;
 	uint64_t net_data_version;
 	int num_net_queries;
+	unsigned int update_refused;
 
 	struct uloop_timeout reload_timer;
 

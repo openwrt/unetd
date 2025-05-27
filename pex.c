@@ -572,7 +572,7 @@ network_pex_recv_update_request(struct network *net, struct network_peer *peer,
 
 	D("receive update request, local version=%"PRIu64", remote version=%"PRIu64, net->net_data_version, req_version);
 
-	if (req_version && req_version >= net->net_data_version) {
+	if (peer && req_version && req_version >= net->net_data_version) {
 		struct pex_update_response_no_data *res;
 
 		pex_msg_init_ext(net, PEX_MSG_UPDATE_RESPONSE_NO_DATA, !!addr);
@@ -584,6 +584,15 @@ network_pex_recv_update_request(struct network *net, struct network_peer *peer,
 
 	if (req_version > net->net_data_version)
 		network_pex_send_update_request(net, peer, addr);
+	else if (!peer && net->net_data_len) {
+		struct pex_update_response_no_data *res;
+
+		pex_msg_init_ext(net, PEX_MSG_UPDATE_RESPONSE_REFUSED, !!addr);
+		res = pex_msg_append(sizeof(*res));
+		res->req_id = req->req_id;
+		res->cur_version = cpu_to_be64(net->net_data_version);
+		pex_msg_send_ext(net, peer, addr);
+	}
 
 	if (!peer || !net->net_data_len)
 		return;
@@ -628,8 +637,12 @@ network_pex_recv_update_response(struct network *net, const uint8_t *data, size_
 		return;
 
 	net_data = pex_msg_update_response_recv(data, len, op, &net_data_len, &version);
-	if (!net_data)
+	if (!net_data) {
+		if (op == PEX_MSG_UPDATE_RESPONSE_REFUSED && net_data_len == -1 &&
+		    version > net->net_data_version)
+			net->update_refused++;
 		return;
+	}
 
 	if (version <= net->net_data_version) {
 		free(net_data);
@@ -684,6 +697,7 @@ network_pex_recv(struct network *net, struct network_peer *peer, struct pex_hdr 
 	case PEX_MSG_UPDATE_RESPONSE:
 	case PEX_MSG_UPDATE_RESPONSE_DATA:
 	case PEX_MSG_UPDATE_RESPONSE_NO_DATA:
+	case PEX_MSG_UPDATE_RESPONSE_REFUSED:
 		network_pex_recv_update_response(net, data, hdr->len,
 					      NULL, hdr->opcode);
 		break;
@@ -1063,6 +1077,7 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 		fallthrough;
 	case PEX_MSG_UPDATE_RESPONSE_DATA:
 	case PEX_MSG_UPDATE_RESPONSE_NO_DATA:
+	case PEX_MSG_UPDATE_RESPONSE_REFUSED:
 		network_pex_recv_update_response(net, data, hdr->len, addr, hdr->opcode);
 		break;
 	case PEX_MSG_ENDPOINT_PORT_NOTIFY:

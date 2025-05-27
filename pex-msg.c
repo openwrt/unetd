@@ -480,6 +480,8 @@ void *pex_msg_update_response_recv(const void *data, int len, enum pex_opcode op
 	uint8_t enc_key[CURVE25519_KEY_SIZE];
 	void *ret;
 
+	if (timestamp)
+		*timestamp = 0;
 	*data_len = 0;
 	if (op == PEX_MSG_UPDATE_RESPONSE) {
 		const struct pex_update_response *res = data;
@@ -510,7 +512,8 @@ void *pex_msg_update_response_recv(const void *data, int len, enum pex_opcode op
 
 		data += sizeof(*res);
 		len -= sizeof(*res);
-	} else if (op == PEX_MSG_UPDATE_RESPONSE_NO_DATA) {
+	} else if (op == PEX_MSG_UPDATE_RESPONSE_NO_DATA ||
+	           op == PEX_MSG_UPDATE_RESPONSE_REFUSED) {
 		const struct pex_update_response_no_data *res = data;
 
 		if (len < sizeof(*res) || !res->cur_version)
@@ -520,6 +523,8 @@ void *pex_msg_update_response_recv(const void *data, int len, enum pex_opcode op
 		if (!ctx)
 			return NULL;
 
+		if (timestamp)
+			*timestamp = be64_to_cpu(res->cur_version);
 		goto error;
 	} else {
 		return NULL;

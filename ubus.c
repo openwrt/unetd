@@ -71,8 +71,13 @@ __network_dump(struct blob_buf *buf, struct network *net)
 		str = blobmsg_alloc_string_buffer(buf, "local_address", INET6_ADDRSTRLEN);
 		inet_ntop(AF_INET6, &local->peer.local_addr.in6, str, INET6_ADDRSTRLEN);
 		blobmsg_add_string_buffer(buf);
+	} else {
+		if (net->net_data_len)
+			blobmsg_add_u8(buf, "no_local_host", true);
 	}
 
+	if (net->update_refused)
+		blobmsg_add_u32(buf, "update_refused", net->update_refused);
 
 	c = blobmsg_open_table(buf, "peers");
 	vlist_for_each_element(&net->peers, peer, node) {
