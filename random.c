@@ -3,13 +3,14 @@
  * Copyright (C) 2025 Felix Fietkau <nbd@nbd.name>
  */
 #ifdef linux
-#include <sys/ramdom.h>
+#include <sys/random.h>
 #endif
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "random.h"
 
-ssize_t __getrandom(void *buf, size_t buflen)
+static ssize_t __getrandom(void *buf, size_t buflen)
 {
 	static FILE *urandom;
 	ssize_t ret;
