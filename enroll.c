@@ -9,6 +9,7 @@
 #include "sha512.h"
 #include "chacha20.h"
 #include "unetd.h"
+#include "random.h"
 #include <libubus.h>
 #include <libubox/blobmsg_json.h>
 
@@ -733,9 +734,8 @@ int enroll_start(struct blob_attr *data)
 	struct blob_attr *meta_buf, *enroll_meta_buf;
 	unsigned int timeout, interval;
 	struct network *net = NULL;
-	int n_connect = 0, err = 0;
+	int n_connect = 0;
 	size_t rem;
-	FILE *f;
 
 	enroll_stop();
 	blobmsg_parse_attr(enroll_start_policy, __ENROLL_START_ATTR_MAX, tb, data);
@@ -795,16 +795,7 @@ int enroll_start(struct blob_attr *data)
 		state->n_connect++;
 	}
 
-	f = fopen("/dev/urandom", "r");
-	if (!f)
-		return UBUS_STATUS_UNKNOWN_ERROR;
-
-	if (fread(state->privkey, sizeof(state->privkey), 1, f) != 1)
-	    err = UBUS_STATUS_UNKNOWN_ERROR;
-
-	fclose(f);
-	if (err)
-	    goto error;
+	randombytes(state->privkey, sizeof(state->privkey));
 
 	curve25519_clamp_secret(state->privkey);
 	curve25519_generate_public(state->pubkey, state->privkey);
@@ -827,11 +818,6 @@ int enroll_start(struct blob_attr *data)
 		uloop_timeout_set(&state->connect_timer, 10);
 
 	return 0;
-
-error:
-	free(state);
-	state = NULL;
-	return err;
 }
 
 void enroll_stop(void)
