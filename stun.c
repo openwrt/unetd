@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "stun.h"
+#include "random.h"
 
 static uint8_t tx_buf[256];
 
@@ -105,7 +106,6 @@ const void *stun_msg_request_prepare(struct stun_request *req, size_t *len,
 				     uint16_t response_port)
 {
 	struct stun_msg_hdr *hdr;
-	FILE *f;
 
 	hdr = stun_msg_init(STUN_MSGTYPE_BINDING_REQUEST);
 	if (response_port) {
@@ -113,14 +113,7 @@ const void *stun_msg_request_prepare(struct stun_request *req, size_t *len,
 		*tlv_port = htons(response_port);
 	}
 
-	f = fopen("/dev/urandom", "r");
-	if (!f)
-		return NULL;
-
-	if (fread(hdr->transaction, 12, 1, f) != 1)
-		return NULL;
-
-	fclose(f);
+	randombytes(hdr->transaction, 12);
 	memcpy(req->transaction, hdr->transaction, sizeof(req->transaction));
 	req->pending = true;
 	req->port = 0;

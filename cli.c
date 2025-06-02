@@ -23,6 +23,7 @@
 #include "ed25519.h"
 #include "curve25519.h"
 #include "auth-data.h"
+#include "random.h"
 #include "pex-msg.h"
 
 static uint8_t peerkey[EDSIGN_PUBLIC_KEY_SIZE];
@@ -438,26 +439,10 @@ static int cmd_pubkey(int argc, char **argv)
 
 static int generate_key(void)
 {
-	FILE *f;
-	int ret;
-
 	if (has_key)
 		return 0;
 
-	f = fopen("/dev/urandom", "r");
-	if (!f) {
-		INFO("Can't open /dev/urandom\n");
-		return 1;
-	}
-
-	ret = fread(seckey, sizeof(seckey), 1, f);
-	fclose(f);
-
-	if (ret != 1) {
-		INFO("Can't read data from /dev/urandom\n");
-		return 1;
-	}
-
+	randombytes(seckey, sizeof(seckey));
 	ed25519_prepare(seckey);
 	has_key = true;
 
