@@ -5,6 +5,7 @@
 #include <time.h>
 #include "unetd.h"
 #include "sha512.h"
+#include "random.h"
 
 static uint8_t salt[8];
 static uint64_t nonce;
@@ -19,17 +20,12 @@ struct token_hdr {
 static bool token_init(void)
 {
 	static bool init_done;
-	FILE *f;
 
 	if (init_done)
 		return true;
 
-	f = fopen("/dev/urandom", "r");
-	if (!f)
-		return false;
-
-	init_done = fread(salt, sizeof(salt), 1, f) == 1;
-	fclose(f);
+	init_done = true;
+	randombytes(salt, sizeof(salt));
 
 	return init_done;
 }

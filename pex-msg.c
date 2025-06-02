@@ -11,6 +11,7 @@
 #include <libubox/list.h>
 #include <libubox/uloop.h>
 #include <libubox/usock.h>
+#include "random.h"
 #include "pex-msg.h"
 #include "chacha20.h"
 #include "auth-data.h"
@@ -23,7 +24,6 @@
  */
 static char pex_tx_buf_storage[PEX_BUF_SIZE + 4] __attribute__((aligned(8)));
 static char * const pex_tx_buf = pex_tx_buf_storage + 4;
-static FILE *pex_urandom;
 static struct uloop_fd pex_fd, pex_unix_fd;
 static LIST_HEAD(requests);
 static struct uloop_timeout gc_timer;
@@ -120,9 +120,7 @@ struct pex_hdr *__pex_msg_init_ext(const uint8_t *pubkey, const uint8_t *auth_ke
 
 	hdr->len = sizeof(*ehdr);
 
-	if (fread(&ehdr->nonce, sizeof(ehdr->nonce), 1, pex_urandom) != 1)
-		return NULL;
-
+	randombytes(&ehdr->nonce, sizeof(ehdr->nonce));
 	hash = pex_network_hash(auth_key, ehdr->nonce);
 	*(uint64_t *)hdr->id ^= hash;
 	memcpy(ehdr->auth_id, auth_key, sizeof(ehdr->auth_id));
@@ -385,8 +383,7 @@ void pex_msg_update_response_init(struct pex_msg_update_send_ctx *ctx,
 	res->req_id = req->req_id;
 	res->data_len = cpu_to_be32(len);
 
-	if (!fread(e_key_priv, sizeof(e_key_priv), 1, pex_urandom))
-		return;
+	randombytes(e_key_priv, sizeof(e_key_priv));
 
 	curve25519_clamp_secret(e_key_priv);
 	curve25519_generate_public(res->e_key, e_key_priv);
@@ -454,10 +451,7 @@ pex_msg_update_request_init(const uint8_t *pubkey, const uint8_t *priv_key,
 	memcpy(&ctx->addr, addr, sizeof(ctx->addr));
 	memcpy(ctx->auth_key, auth_key, sizeof(ctx->auth_key));
 	memcpy(ctx->priv_key, priv_key, sizeof(ctx->priv_key));
-	if (!fread(&ctx->req_id, sizeof(ctx->req_id), 1, pex_urandom)) {
-		free(ctx);
-		return NULL;
-	}
+	randombytes(&ctx->req_id, sizeof(ctx->req_id));
 	list_add_tail(&ctx->list, &requests);
 	if (!gc_timer.pending)
 		uloop_timeout_set(&gc_timer, 1000);
@@ -647,13 +641,9 @@ int pex_open(void *addr, size_t addr_len, pex_recv_cb_t cb, bool server)
 #endif
 	}
 
-	pex_urandom = fopen("/dev/urandom", "r");
-	if (!pex_urandom)
-		goto close_raw;
-
 	fd = socket(sa->sa_family == AF_INET ? PF_INET : PF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	if (fd < 0)
-		goto close_urandom;
+		goto close_raw;
 
 	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
 	fcntl(fd, F_SETFD, fcntl(fd, F_GETFD) | FD_CLOEXEC);
@@ -685,9 +675,6 @@ int pex_open(void *addr, size_t addr_len, pex_recv_cb_t cb, bool server)
 
 close_socket:
 	close(fd);
-close_urandom:
-	fclose(pex_urandom);
-	pex_urandom = NULL;
 close_raw:
 	if (pex_raw_v4_fd >= 0)
 		close(pex_raw_v4_fd);
@@ -728,9 +715,6 @@ void pex_close(void)
 	pex_raw_v4_fd = -1;
 	pex_raw_v6_fd = -1;
 
-	if (pex_urandom)
-		fclose(pex_urandom);
-
 	if (pex_fd.cb) {
 		uloop_fd_delete(&pex_fd);
 		close(pex_fd.fd);
@@ -743,5 +727,4 @@ void pex_close(void)
 
 	pex_fd.cb = NULL;
 	pex_unix_fd.cb = NULL;
-	pex_urandom = NULL;
 }
