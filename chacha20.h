@@ -5,6 +5,9 @@
 #ifndef __UNETD_CHACHA20_H
 #define __UNETD_CHACHA20_H
 
+#include <stdint.h>
+#include <stdlib.h>
+
 #define CHACHA20_NONCE_SIZE	8
 #define CHACHA20_KEY_SIZE	32
 
