@@ -97,6 +97,7 @@ enum {
 	NETWORK_HOST_PEX_PORT,
 	NETWORK_HOST_ENDPOINT,
 	NETWORK_HOST_GATEWAY,
+	NETWORK_HOST_META,
 	__NETWORK_HOST_MAX
 };
 
@@ -109,17 +110,18 @@ static const struct blobmsg_policy host_policy[__NETWORK_HOST_MAX] = {
 	[NETWORK_HOST_PEX_PORT] = { "peer-exchange-port", BLOBMSG_TYPE_INT32 },
 	[NETWORK_HOST_ENDPOINT] = { "endpoint", BLOBMSG_TYPE_STRING },
 	[NETWORK_HOST_GATEWAY] = { "gateway", BLOBMSG_TYPE_STRING },
+	[NETWORK_HOST_META] = { "meta", BLOBMSG_TYPE_TABLE },
 };
 
 static void
 network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 {
 	struct blob_attr *tb[__NETWORK_HOST_MAX];
-	struct blob_attr *cur, *ipaddr, *subnet;
+	struct blob_attr *cur, *ipaddr, *subnet, *meta;
 	uint8_t key[CURVE25519_KEY_SIZE];
 	struct network_host *host = NULL;
 	struct network_peer *peer;
-	int ipaddr_len, subnet_len;
+	int ipaddr_len, subnet_len, meta_len;
 	const char *endpoint, *gateway;
 	char *endpoint_buf, *gateway_buf;
 	int rem;
@@ -138,6 +140,11 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 	if (subnet_len &&
 	    blobmsg_check_array(tb[NETWORK_HOST_SUBNET], BLOBMSG_TYPE_STRING) < 0)
 		subnet_len = 0;
+
+	meta_len = tb[NETWORK_HOST_META] ? blob_pad_len(tb[NETWORK_HOST_META]) : 0;
+	if (meta_len &&
+	    blobmsg_check_array(tb[NETWORK_HOST_META], BLOBMSG_TYPE_STRING) < 0)
+		meta_len = 0;
 
 	if ((cur = tb[NETWORK_HOST_ENDPOINT]) != NULL)
 		endpoint = blobmsg_get_string(cur);
@@ -181,6 +188,7 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 				&name_buf, strlen(name) + 1,
 				&ipaddr, ipaddr_len,
 				&subnet, subnet_len,
+				&meta, meta_len,
 				&endpoint_buf, endpoint ? strlen(endpoint) + 1 : 0,
 				&gateway_buf, gateway ? strlen(gateway) + 1 : 0);
 		host->node.key = strcpy(name_buf, name);
@@ -202,6 +210,8 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 		peer->pex_port = net->net_config.pex_port;
 	if (endpoint)
 		peer->endpoint = strcpy(endpoint_buf, endpoint);
+	if ((cur = tb[NETWORK_HOST_META]) != NULL && meta_len)
+		peer->meta = memcpy(meta, cur, meta_len);
 	memcpy(peer->key, key, sizeof(key));
 
 	memcpy(&peer->local_addr.network_id,

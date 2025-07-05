@@ -20,6 +20,7 @@ struct network_peer {
 	const char *endpoint;
 	struct blob_attr *ipaddr;
 	struct blob_attr *subnet;
+	struct blob_attr *meta;
 	int port;
 	int pex_port;
 	bool dynamic;

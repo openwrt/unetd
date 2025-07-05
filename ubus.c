@@ -68,9 +68,13 @@ __network_dump(struct blob_buf *buf, struct network *net)
 	if (local) {
 		blobmsg_add_string(buf, "local_host", network_host_name(local));
 
+		peer = &local->peer;
 		str = blobmsg_alloc_string_buffer(buf, "local_address", INET6_ADDRSTRLEN);
-		inet_ntop(AF_INET6, &local->peer.local_addr.in6, str, INET6_ADDRSTRLEN);
+		inet_ntop(AF_INET6, &peer->local_addr.in6, str, INET6_ADDRSTRLEN);
 		blobmsg_add_string_buffer(buf);
+		if (peer->meta)
+			blobmsg_add_field(buf, BLOBMSG_TYPE_TABLE, "local_meta",
+					  blobmsg_data(peer->meta), blobmsg_data_len(peer->meta));
 	} else {
 		if (net->net_data_len)
 			blobmsg_add_u8(buf, "no_local_host", true);
@@ -107,6 +111,9 @@ __network_dump(struct blob_buf *buf, struct network *net)
 			blobmsg_add_u32(buf, "idle", peer->state.idle);
 			blobmsg_add_u32(buf, "last_handshake_sec", peer->state.last_handshake_diff);
 		}
+		if (peer->meta)
+			blobmsg_add_field(buf, BLOBMSG_TYPE_TABLE, "meta", blobmsg_data(peer->meta),
+					  blobmsg_data_len(peer->meta));
 
 		blobmsg_close_table(buf, p);
 	}
