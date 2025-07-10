@@ -47,7 +47,7 @@ ELSE()
 ENDIF()
 
 ADD_DEFINITIONS(-DMLK_CONFIG_USE_NATIVE_BACKEND_ARITH)
-ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c auth-data.c chacha20.c pex-msg.c utils.c stun.c random.c sntrup761.c)
+ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c auth-data.c chacha20.c pex-msg.c utils.c stun.c random.c sntrup761.c shake.c)
 TARGET_LINK_LIBRARIES(unet ubox)
 
 ADD_EXECUTABLE(unetd ${SOURCES})
