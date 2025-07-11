@@ -2773,6 +2773,12 @@ next:
     return 0;
 }
 
+int sntrup761_pubkey(uint8_t *pk, const uint8_t *sk)
+{
+	memcpy(pk, sk + SecretKeys_bytes, SNTRUP761_PUB_SIZE);
+	return 0;
+}
+
 int sntrup761_enc(uint8_t *c, uint8_t *k, const uint8_t *pk)
 {
     Encap(c, k, pk);
