@@ -233,6 +233,7 @@ wg_linux_peer_update(struct network *net, struct network_peer *peer, enum wg_upd
 	}
 
 	nla_put_u32(req.msg, WGPEER_A_FLAGS, WGPEER_F_REPLACE_ALLOWEDIPS);
+	nla_put(req.msg, WGPEER_A_PRESHARED_KEY, WG_KEY_LEN, peer->psk);
 
 	req.ips = nla_nest_start(req.msg, WGPEER_A_ALLOWEDIPS);
 
