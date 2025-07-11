@@ -1862,6 +1862,36 @@ crypto_sign_keypair_internal(uint8_t *pk, uint8_t *sk,
   return 0;
 }
 
+int MLD_44_ref_pubkey(uint8_t *pk, const uint8_t *sk)
+{
+  uint8_t rho[MLDSA_SEEDBYTES];
+  uint8_t key[MLDSA_SEEDBYTES];
+  uint8_t tr[MLDSA_TRBYTES];
+  polyvecl mat[MLDSA_K];
+  polyvecl s1;
+  polyveck s2, t2, t1, t0;
+
+  unpack_sk(rho, tr, key, &t0, &s1, &s2, sk);
+
+  /* Expand matrix */
+  polyvec_matrix_expand(mat, rho);
+
+  /* Matrix-vector multiplication */
+  polyvecl_ntt(&s1);
+  polyvec_matrix_pointwise_montgomery(&t1, mat, &s1);
+  polyveck_reduce(&t1);
+  polyveck_invntt_tomont(&t1);
+
+  /* Add error vector s2 */
+  polyveck_add(&t1, &s2);
+
+  /* Extract t1 and write public key */
+  polyveck_caddq(&t1);
+  polyveck_power2round(&t2, &t0, &t1);
+  pack_pk(pk, rho, &t2);
+  return 0;
+}
+
 int MLD_44_ref_keypair(uint8_t *pk, uint8_t *sk)
 {
   uint8_t seed[MLDSA_SEEDBYTES];
