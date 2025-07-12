@@ -11,12 +11,13 @@
 #define MLD_44_PUBLICKEYBYTES 1312
 #define MLD_44_SECRETKEYBYTES 2560
 #define MLD_44_BYTES 2420
+#define MLDSA_SEEDBYTES 32
 
 #define MLD_44_ref_PUBLICKEYBYTES MLD_44_PUBLICKEYBYTES
 #define MLD_44_ref_SECRETKEYBYTES MLD_44_SECRETKEYBYTES
 #define MLD_44_ref_BYTES MLD_44_BYTES
 
-int MLD_44_ref_keypair(uint8_t *pk, uint8_t *sk);
+int MLD_44_ref_keypair(uint8_t *pk, uint8_t *sk, const uint8_t *seed);
 int MLD_44_ref_pubkey(uint8_t *pk, const uint8_t *sk);
 
 int MLD_44_ref_signature(uint8_t *sig, size_t *siglen, const uint8_t *m,
