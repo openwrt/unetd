@@ -25,11 +25,23 @@
 #include "auth-data.h"
 #include "random.h"
 #include "pex-msg.h"
+#include "sntrup761.h"
+#include "mldsa.h"
+
+#define _max(a, b) ((a) > (b) ? (a) : (b))
+
+#define MAX_PUBKEY_SIZE _max(MLD_44_PUBLICKEYBYTES, SNTRUP761_PUB_SIZE)
+#define MAX_SECKEY_SIZE _max(MLD_44_SECRETKEYBYTES, SNTRUP761_SEC_SIZE)
+#define MAX_KEY_SIZE _max(MAX_PUBKEY_SIZE, MAX_SECKEY_SIZE)
 
 static uint8_t peerkey[EDSIGN_PUBLIC_KEY_SIZE];
 static uint8_t pubkey[EDSIGN_PUBLIC_KEY_SIZE];
 static uint8_t seckey[EDSIGN_PUBLIC_KEY_SIZE];
 static uint8_t xorkey[EDSIGN_PUBLIC_KEY_SIZE];
+static uint8_t pubkey_pq[MAX_SECKEY_SIZE];
+static uint8_t seckey_pq[MAX_SECKEY_SIZE];
+static uint8_t xorkey_pq[MAX_SECKEY_SIZE];
+static size_t pubkey_pq_len, seckey_pq_len, xorkey_pq_len;
 static void *net_data;
 static size_t net_data_len;
 static uint64_t net_data_version;
@@ -39,11 +51,13 @@ static struct blob_buf b;
 static FILE *out_file;
 static bool quiet;
 static bool sync_done;
+static bool pq_keys;
 static bool has_key, has_xor;
 static int password_prompt;
 static enum {
 	CMD_UNKNOWN,
-	CMD_GENERATE,
+	CMD_GENERATE_SIGN,
+	CMD_GENERATE_HOST,
 	CMD_PUBKEY,
 	CMD_HOST_PUBKEY,
 	CMD_VERIFY,
@@ -60,12 +74,19 @@ static enum {
 		fprintf(stderr, ##__VA_ARGS__);		\
 	} while (0)
 
-static void print_key(const uint8_t *key)
+static void print_key(const uint8_t *key, const uint8_t *pq_key, size_t pq_len)
 {
-	char keystr[B64_ENCODE_LEN(EDSIGN_PUBLIC_KEY_SIZE)];
+	char keystr[B64_ENCODE_LEN(MAX_KEY_SIZE)];
 
 	if (b64_encode(key, EDSIGN_PUBLIC_KEY_SIZE, keystr, sizeof(keystr)) < 0)
 		return;
+
+	if (pq_key && pq_len) {
+		fprintf(out_file, "%s:", keystr);
+
+		if (b64_encode(pq_key, pq_len, keystr, sizeof(keystr)) < 0)
+			return;
+	}
 
 	fprintf(out_file, "%s\n", keystr);
 }
@@ -79,7 +100,8 @@ static int usage(const char *progname)
 		"	-P			Get public signing key from secret key\n"
 		"	-H			Get public host key from secret key\n"
 		"	-T			Get network data from signed file\n"
-		"	-G			Generate new private key\n"
+		"	-g			Generate new private host key\n"
+		"	-G			Generate new private signing key\n"
 		"	-D <host>[:<port>]	Download network data from unetd\n"
 		"	-U <host>[:<port>]	Upload network data to unetd\n"
 		"\n"
@@ -95,6 +117,7 @@ static int usage(const char *progname)
 		"	-p			Prompt for seed password\n"
 		"	-b <file>:		Read signed network data file\n"
 		"	-x <file>|-:		Apply extra key using XOR\n"
+		"	-Q			Enable post-quantum keys\n"
 		"\n", progname);
 	return 1;
 }
@@ -252,7 +275,7 @@ static int load_network_data(const char *file)
 
 	hdr = net_data;
 	data = (struct unet_auth_data *)(hdr + 1);
-	memcpy(pubkey, data->pubkey, sizeof(pubkey));
+	memcpy(pubkey, data->pubkey, sizeof(data->pubkey));
 
 	blob_buf_init(&b, 0);
 	blobmsg_add_json_from_string(&b, json);
@@ -359,7 +382,7 @@ static int cmd_sign(int argc, char **argv)
 
 	len += sizeof(*data) + 1;
 
-	memcpy(data->pubkey, pubkey, sizeof(pubkey));
+	memcpy(data->pubkey, pubkey, sizeof(data->pubkey));
 	edsign_sign(hdr.signature, pubkey, seckey, (const void *)data, len);
 
 	fwrite(&hdr, sizeof(hdr), 1, out_file);
@@ -424,15 +447,52 @@ static int cmd_verify(int argc, char **argv)
 
 static int cmd_host_pubkey(int argc, char **argv)
 {
+	size_t pq_len = 0;
+
 	curve25519_generate_public(pubkey, seckey);
-	print_key(pubkey);
+
+	if (seckey_pq_len) {
+		if (seckey_pq_len != SNTRUP761_SEC_SIZE) {
+			INFO("Post-quantum host key missing\n");
+			return 1;
+		}
+
+		sntrup761_pubkey(pubkey_pq, seckey_pq);
+		pq_len = SNTRUP761_PUB_SIZE;
+	} else if (pq_keys || pubkey_pq_len) {
+		if (pubkey_pq_len != SNTRUP761_PUB_SIZE) {
+			INFO("Invalid post-quantum host key\n");
+			return 1;
+		}
+		pq_len = SNTRUP761_PUB_SIZE;
+	}
+
+	print_key(pubkey, pubkey_pq, pq_len);
 
 	return 0;
 }
 
 static int cmd_pubkey(int argc, char **argv)
 {
-	print_key(pubkey);
+	size_t pq_len = 0;
+
+	if (seckey_pq_len) {
+		if (seckey_pq_len != MLD_44_SECRETKEYBYTES) {
+			INFO("Post-quantum signing key missing/invalid\n");
+			return 1;
+		}
+
+		MLD_44_ref_pubkey(pubkey_pq, seckey_pq);
+		pq_len = MLD_44_PUBLICKEYBYTES;
+	} else if (pq_keys || pubkey_pq_len) {
+		if (pubkey_pq_len != MLD_44_PUBLICKEYBYTES) {
+			INFO("Invalid post-quantum host key\n");
+			return 1;
+		}
+		pq_len = MLD_44_PUBLICKEYBYTES;
+	}
+
+	print_key(pubkey, pubkey_pq, pq_len);
 
 	return 0;
 }
@@ -449,9 +509,32 @@ static int generate_key(void)
 	return 0;
 }
 
+static int cmd_generate_host(int argc, char **argv)
+{
+	generate_key();
+
+	if (pq_keys && !seckey_pq_len) {
+		sntrup761_keypair(pubkey_pq, seckey_pq);
+		pubkey_pq_len = SNTRUP761_PUB_SIZE;
+		seckey_pq_len = SNTRUP761_SEC_SIZE;
+	}
+
+	print_key(seckey, seckey_pq, pq_keys ? SNTRUP761_SEC_SIZE : 0);
+
+	return 0;
+}
+
 static int cmd_generate(int argc, char **argv)
 {
-	print_key(seckey);
+	generate_key();
+
+	if (pq_keys && !seckey_pq_len) {
+		MLD_44_ref_keypair(pubkey_pq, seckey_pq, NULL);
+		pubkey_pq_len = MLD_44_PUBLICKEYBYTES;
+		seckey_pq_len = MLD_44_SECRETKEYBYTES;
+	}
+
+	print_key(seckey, seckey_pq, pq_keys ? MLD_44_SECRETKEYBYTES : 0);
 
 	return 0;
 }
@@ -470,9 +553,10 @@ static int cmd_netdata(int argc, char **argv)
 	return 0;
 }
 
-static bool parse_key(uint8_t *dest, const char *str)
+static bool parse_key(uint8_t *dest, uint8_t *pq_dest, size_t *pq_dest_len, const char *str)
 {
-	char keystr[B64_ENCODE_LEN(EDSIGN_PUBLIC_KEY_SIZE) + 2];
+	char keystr[B64_ENCODE_LEN(EDSIGN_PUBLIC_KEY_SIZE) + B64_ENCODE_LEN(MAX_KEY_SIZE) + 4];
+	char *pq_key;
 	FILE *f;
 	int len;
 
@@ -492,9 +576,23 @@ static bool parse_key(uint8_t *dest, const char *str)
 
 	keystr[len] = 0;
 
-	if (b64_decode(keystr, dest, EDSIGN_PUBLIC_KEY_SIZE) != EDSIGN_PUBLIC_KEY_SIZE) {
+	pq_key = strchr(keystr, ':');
+	if (pq_key)
+		*(pq_key++) = 0;
+
+	if (b64_decode(keystr, dest, len) != EDSIGN_PUBLIC_KEY_SIZE) {
 		INFO("Failed to parse key data\n");
 		return false;
+	}
+
+	if (pq_key && pq_dest) {
+		len = b64_decode(pq_key, pq_dest, MAX_KEY_SIZE);
+		if (len < 0) {
+			INFO("Failed to parse PQ key data\n");
+			return false;
+		}
+
+		*pq_dest_len = (size_t)len;
 	}
 
 	return true;
@@ -516,9 +614,9 @@ pbkdf2_hmac_sha512(uint8_t *dest, const void *key, size_t key_len,
 	}
 }
 
-static bool parse_seed(uint8_t *dest, const char *salt)
+static bool parse_seed(const char *salt)
 {
-	uint8_t hash[SHA512_HASH_SIZE];
+	uint8_t hash[_max(SHA512_HASH_SIZE, MLDSA_SEEDBYTES)] = {};
 	char buf[256], *pw = buf;
 	unsigned long rounds;
 	size_t len = 0;
@@ -558,7 +656,19 @@ static bool parse_seed(uint8_t *dest, const char *salt)
 	}
 
 	pbkdf2_hmac_sha512(hash, pw, len, salt, strlen(salt), rounds);
-	memcpy(dest, hash, EDSIGN_PUBLIC_KEY_SIZE);
+	memcpy(seckey, hash, EDSIGN_PUBLIC_KEY_SIZE);
+	has_key = true;
+
+	if (pq_keys) {
+		uint8_t pq_salt[SHA512_HASH_SIZE];
+
+		hmac_sha512(pq_salt, seckey, sizeof(seckey), salt, strlen(salt));
+		pbkdf2_hmac_sha512(hash, pw, len, pq_salt, sizeof(pq_salt), rounds);
+
+		MLD_44_ref_keypair(pubkey_pq, seckey_pq, hash);
+		pubkey_pq_len = MLD_44_PUBLICKEYBYTES;
+		seckey_pq_len = MLD_44_SECRETKEYBYTES;
+	}
 
 	return true;
 }
@@ -601,7 +711,8 @@ static bool cmd_needs_outfile(void)
 	switch (cmd) {
 	case CMD_SIGN:
 	case CMD_PUBKEY:
-	case CMD_GENERATE:
+	case CMD_GENERATE_SIGN:
+	case CMD_GENERATE_HOST:
 	case CMD_DOWNLOAD:
 	case CMD_NETDATA:
 		return true;
@@ -617,9 +728,10 @@ int main(int argc, char **argv)
 	const char *cmd_arg = NULL;
 	bool has_pubkey = false;
 	bool has_peerkey = false;
+	const char *seed = NULL;
 	int ret, ch;
 
-	while ((ch = getopt(argc, argv, "b:h:k:K:o:qD:GHpPs:STU:Vx:")) != -1) {
+	while ((ch = getopt(argc, argv, "b:h:k:K:o:qQD:gGHpPs:STU:Vx:")) != -1) {
 		switch (ch) {
 		case 'D':
 		case 'U':
@@ -647,7 +759,7 @@ int main(int argc, char **argv)
 			if (has_peerkey)
 				return usage(progname);
 
-			if (!parse_key(peerkey, optarg))
+			if (!parse_key(peerkey, NULL, NULL, optarg))
 				return 1;
 
 			has_peerkey = true;
@@ -656,16 +768,13 @@ int main(int argc, char **argv)
 			if (has_pubkey)
 				return usage(progname);
 
-			if (!parse_seed(seckey, optarg))
-				return 1;
-
-			has_key = true;
+			seed = optarg;
 			break;
 		case 'k':
 			if (has_pubkey)
 				return usage(progname);
 
-			if (!parse_key(pubkey, optarg))
+			if (!parse_key(pubkey, pubkey_pq, &pubkey_pq_len, optarg))
 				return 1;
 
 			has_pubkey = true;
@@ -674,7 +783,7 @@ int main(int argc, char **argv)
 			if (has_pubkey)
 				return usage(progname);
 
-			if (!parse_key(seckey, optarg))
+			if (!parse_key(seckey, seckey_pq, &seckey_pq_len, optarg))
 				return 1;
 
 			has_key = true;
@@ -689,10 +798,13 @@ int main(int argc, char **argv)
 			has_pubkey = true;
 			break;
 		case 'x':
-			if (!parse_key(xorkey, optarg))
+			if (!parse_key(xorkey, xorkey_pq, &xorkey_pq_len, optarg))
 				return 1;
 
 			has_xor = true;
+			break;
+		case 'Q':
+			pq_keys = true;
 			break;
 		case 'U':
 			cmd = CMD_UPLOAD;
@@ -702,8 +814,11 @@ int main(int argc, char **argv)
 			cmd = CMD_DOWNLOAD;
 			cmd_arg = optarg;
 			break;
+		case 'g':
+			cmd = CMD_GENERATE_HOST;
+			break;
 		case 'G':
-			cmd = CMD_GENERATE;
+			cmd = CMD_GENERATE_SIGN;
 			break;
 		case 'S':
 			cmd = CMD_SIGN;
@@ -725,13 +840,24 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (cmd == CMD_GENERATE && generate_key())
+	if (seed && !parse_seed(seed))
 		return 1;
 
 	if (has_key) {
 		if (has_xor)
 			for (size_t i = 0; i < ARRAY_SIZE(seckey); i++)
 				seckey[i] ^= xorkey[i];
+
+		if (xorkey_pq_len) {
+			if (seckey_pq_len != xorkey_pq_len) {
+				INFO("PQ xor key length mismatch: %d != %d\n", (int)seckey_pq_len, (int)xorkey_pq_len);
+				return 1;
+			}
+
+			for (size_t i = 0; i < ARRAY_SIZE(seckey_pq); i++)
+				seckey_pq[i] ^= xorkey_pq[i];
+		}
+
 		edsign_sec_to_pub(pubkey, seckey);
 		has_pubkey = true;
 	}
@@ -770,7 +896,10 @@ int main(int argc, char **argv)
 	case CMD_DOWNLOAD:
 		ret = cmd_sync(cmd_arg, argc, argv);
 		break;
-	case CMD_GENERATE:
+	case CMD_GENERATE_HOST:
+		ret = cmd_generate_host(argc, argv);
+		break;
+	case CMD_GENERATE_SIGN:
 		ret = cmd_generate(argc, argv);
 		break;
 	case CMD_SIGN:
