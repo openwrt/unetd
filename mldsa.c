@@ -1892,10 +1892,13 @@ int MLD_44_ref_pubkey(uint8_t *pk, const uint8_t *sk)
   return 0;
 }
 
-int MLD_44_ref_keypair(uint8_t *pk, uint8_t *sk)
+int MLD_44_ref_keypair(uint8_t *pk, uint8_t *sk, const uint8_t *seed)
 {
-  uint8_t seed[MLDSA_SEEDBYTES];
-  randombytes(seed, MLDSA_SEEDBYTES);
+  uint8_t _seed[MLDSA_SEEDBYTES];
+  if (!seed) {
+	  randombytes(_seed, MLDSA_SEEDBYTES);
+	  seed = _seed;
+  }
   return crypto_sign_keypair_internal(pk, sk, seed);
 }
 
