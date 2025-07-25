@@ -11,9 +11,9 @@ build() (
 clone() (
 	local dir="$1"
 	local url="$2"
-	if [ -d "$dir" ]; then 
+	if [ -d "$dir" ]; then
 		cd "$dir"
-		git pull --rebase
+		git pull --rebase --autostash
 	else
 		git clone "$url" "$dir"
 	fi

@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <libubox/uloop.h>
 #include "curve25519.h"
+#include "sntrup761.h"
 
 enum network_type {
 	NETWORK_TYPE_FILE,
@@ -31,6 +32,7 @@ struct network {
 		uint8_t key[CURVE25519_KEY_SIZE];
 		uint8_t pubkey[CURVE25519_KEY_SIZE];
 		uint8_t auth_key[CURVE25519_KEY_SIZE];
+		uint8_t pqc_sec[SNTRUP761_SEC_SIZE];
 		const char *file;
 		const char *interface;
 		const char *update_cmd;
