@@ -209,6 +209,7 @@ int main(int argc, char **argv)
 		udebug_ubus_ring_init(&ud, &rings[i]);
 #endif
 
+	gen_kex_hash();
 	unetd_ubus_init();
 	unetd_write_hosts();
 	global_pex_open(unix_socket);

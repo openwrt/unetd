@@ -4,14 +4,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include "chacha20.h"
 #include "curve25519.h"
+#include "sntrup761.h"
 #include "siphash.h"
 #include "utils.h"
 
 #define UNETD_GLOBAL_PEX_PORT		51819
-#define PEX_BUF_SIZE			1024
+#define PEX_BUF_SIZE			1280
 #define PEX_RX_BUF_SIZE			16384
 #define UNETD_NET_DATA_SIZE_MAX		(128 * 1024)
+#define MAC_LEN			8
 
 enum pex_opcode {
 	PEX_MSG_HELLO,
@@ -27,6 +30,13 @@ enum pex_opcode {
 	PEX_MSG_ENDPOINT_PORT_NOTIFY,
 	PEX_MSG_ENROLL,
 	PEX_MSG_UPDATE_RESPONSE_REFUSED,
+
+	PEX_MSG_PSK_KEX_STATUS_REQUEST,
+	PEX_MSG_PSK_KEX_STATUS_RESPONSE,
+	PEX_MSG_PSK_KEX_INITIATOR_MSG_PART1,
+	PEX_MSG_PSK_KEX_INITIATOR_MSG_PART2,
+	PEX_MSG_PSK_KEX_RESPONDER_MSG_PART1,
+	PEX_MSG_PSK_KEX_RESPONDER_MSG_PART2,
 };
 
 #define PEX_ID_LEN		8
