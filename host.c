@@ -4,6 +4,12 @@
  */
 #include <libubox/avl-cmp.h>
 #include <libubox/blobmsg_json.h>
+#include <string.h>
+#include "libubox/blobmsg.h"
+#include "libubox/utils.h"
+#include "psk-kex.h"
+#include "random.h"
+#include "sntrup761.h"
 #include "unetd.h"
 
 static LIST_HEAD(old_hosts);
@@ -90,6 +96,7 @@ network_host_add_group(struct network *net, struct network_host *host,
 
 enum {
 	NETWORK_HOST_KEY,
+	NETWORK_HOST_PQC_KEY,
 	NETWORK_HOST_GROUPS,
 	NETWORK_HOST_IPADDR,
 	NETWORK_HOST_SUBNET,
@@ -103,6 +110,7 @@ enum {
 
 static const struct blobmsg_policy host_policy[__NETWORK_HOST_MAX] = {
 	[NETWORK_HOST_KEY] = { "key", BLOBMSG_TYPE_STRING },
+	[NETWORK_HOST_PQC_KEY] = { "pqc-key", BLOBMSG_TYPE_STRING },
 	[NETWORK_HOST_GROUPS] = { "groups", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_HOST_IPADDR] = { "ipaddr", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_HOST_SUBNET] = { "subnet", BLOBMSG_TYPE_ARRAY },
@@ -119,11 +127,13 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 	struct blob_attr *tb[__NETWORK_HOST_MAX];
 	struct blob_attr *cur, *ipaddr, *subnet, *meta;
 	uint8_t key[CURVE25519_KEY_SIZE];
+	uint8_t pqc_key[SNTRUP761_PUB_SIZE] = {0};
 	struct network_host *host = NULL;
 	struct network_peer *peer;
 	int ipaddr_len, subnet_len, meta_len;
 	const char *endpoint, *gateway;
 	char *endpoint_buf, *gateway_buf;
+	bool has_pqc_key = false;
 	int rem;
 
 	blobmsg_parse(host_policy, __NETWORK_HOST_MAX, tb, blobmsg_data(attr), blobmsg_len(attr));
@@ -159,6 +169,10 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 	if (b64_decode(blobmsg_get_string(tb[NETWORK_HOST_KEY]), key,
 		       sizeof(key)) != sizeof(key))
 		return;
+
+	if (b64_decode(blobmsg_get_string(tb[NETWORK_HOST_PQC_KEY]),
+		       pqc_key, SNTRUP761_PUB_SIZE) == SNTRUP761_PUB_SIZE)
+		has_pqc_key = true;
 
 	if (dynamic) {
 		struct network_dynamic_peer *dyn_peer;
@@ -213,6 +227,15 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 	if ((cur = tb[NETWORK_HOST_META]) != NULL && meta_len)
 		peer->meta = memcpy(meta, cur, meta_len);
 	memcpy(peer->key, key, sizeof(key));
+
+	// If a PQC key is defined, set a random PSK key. This ensure no data
+	// transfer prior the first PQC handshake.
+	if (has_pqc_key) {
+		memcpy(peer->pqc_pub, pqc_key, sizeof(pqc_key));
+		randombytes(peer->psk, sizeof(peer->psk));
+
+		init_psk_kex_ctx(net, peer);
+	}
 
 	memcpy(&peer->local_addr.network_id,
 		   &net->net_config.addr.network_id,

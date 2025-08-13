@@ -5,6 +5,7 @@
  * Based on wireguard-tools:
  *   Copyright (C) 2015-2020 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
  */
+#include "psk-kex.h"
 #define _GNU_SOURCE
 #include <stdbool.h>
 #include <stddef.h>
@@ -233,6 +234,8 @@ wg_linux_peer_update(struct network *net, struct network_peer *peer, enum wg_upd
 	}
 
 	nla_put_u32(req.msg, WGPEER_A_FLAGS, WGPEER_F_REPLACE_ALLOWEDIPS);
+	if (peer->kex_ctx.role != PSK_KEX_ROLE_NONE)
+		nla_put(req.msg, WGPEER_A_PRESHARED_KEY, WG_KEY_LEN, peer->psk);
 
 	req.ips = nla_nest_start(req.msg, WGPEER_A_ALLOWEDIPS);
 
