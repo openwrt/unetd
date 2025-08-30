@@ -28,12 +28,16 @@ unetd is a WireGuard based VPN daemon that simplifies creating and managing full
 ### OpenWrt
  TBC
 
-### Linux
+### Other Linux
+
+#### Manually
 
 The following build dependencies are required:
 
  - cmake, pkg-config
- - libelf-dev, zlib1g-dev, libjson-c-dev
+ - libelf, zlib, libjson-c
+
+`ucode` is required at runtime for `unet-cli`
 
 To build:
 
@@ -49,7 +53,7 @@ cd unetd
 
 This set of example commands assumes two OpenWRT routers with the IP addresses `192.168.1.13` and `192.168.1.15` which have **not** been configured for unetd yet, each has `unetd`, `unet-cli` and `unet-tool` installed. `vxlan` (and its implied `kmod-vxlan`) are also installed. The assumption here is that the local host, here say 192.168.1.2 has these installed, and also forms a unet node.
 
-Note: `unetd` is not yet capable of installing these prerequisites above via `opkg`.
+Note: `unetd` is not yet capable of installing these prerequisites above via `apk` (or `opkg`).
 
 ### Example
 
