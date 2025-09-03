@@ -6,6 +6,7 @@
 #include "pex-msg.h"
 #include "stdint.h"
 #include "sntrup761.h"
+#include "utils.h"
 
 #define MAC_LEN		8
 
@@ -79,6 +80,7 @@ struct pex_psk_kex_responder_msg {
 };
 
 void gen_kex_hash(void);
+void psk_kex_request_status_cb(struct uloop_timeout *t);
 void init_psk_kex_ctx(struct network *net, struct network_peer *peer);
 void psk_kex_recv_msg(struct network *net, struct network_peer *peer, enum pex_opcode opcode, const void *data, size_t len);
 void psk_kex_request_status(struct network *net, struct network_peer *peer);

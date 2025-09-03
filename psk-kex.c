@@ -10,10 +10,15 @@
 #include "sha512.h"
 #include "siphash.h"
 #include "sntrup761.h"
+#include "unetd.h"
+#include "utils.h"
+#include "wg.h"
 #include <climits>
 #include <ctime>
 #include <stdbool.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include "libubox/vlist.h"
 
 #define KEX_LABEL		"WG PQ PSK sntrup761"
 #define HANDSHAKE_INTERVAL 	120
@@ -93,7 +98,55 @@ psk_kex_need_handshake(struct network_peer *peer)
 	return last == 0 || now - last > HANDSHAKE_INTERVAL;
 }
 
-/* This should be called regularly by some kind of timer */
+void psk_kex_request_status_cb(struct uloop_timeout *t)
+{
+	struct network *net = container_of(t, struct network, pex.request_psk_kex_status_timer);
+	struct network_peer *peer;
+
+	D_NET(net, "in %s", __func__);
+
+	uloop_timeout_set(t, HANDSHAKE_INTERVAL);
+
+	if (list_empty(&net->peers))
+		return;
+
+	D_NET(net, "Iterating over peers to request psk-kex status.");
+
+	vlist_for_each_element(&net->peers, peer, node) {
+		psk_kex_request_status(net, peer);
+	}
+}
+
+static void
+psk_kex_send_msg(struct network *net, struct network_peer *peer)
+{
+	struct sockaddr_in6 *addr = NULL;
+	char addrbuf[INET6_ADDRSTRLEN];
+
+	// FIXME: is it fine to just use the first valid address
+	// 	or use the "most appropriate" one
+	// 	or send to all unique endpoint addresses??
+
+	for (int i = 0; i < __ENDPOINT_TYPE_MAX; i++) {
+		union network_endpoint *ep = &peer->state.next_endpoint[i];
+
+		if (!ep->in6.sin6_family) // AF_UNSPEC aka no address?
+			continue;
+
+		addr = &ep->in6;
+		break;
+	}
+
+	if (!addr) {
+		D_PEER(net, peer, "ERR no address to send to");
+		return;
+	}
+	D_PEER(net, peer, "send msg to peer addr %s",
+		inet_ntop(addr->sin6_family, (const void *)&addr->sin6_addr, addrbuf,
+			sizeof(addrbuf)));
+	pex_msg_send_ext(net, peer, addr);
+}
+
 void
 psk_kex_request_status(struct network *net, struct network_peer *peer)
 {
@@ -107,10 +160,11 @@ psk_kex_request_status(struct network *net, struct network_peer *peer)
 	resp->last_handshake_time = peer->state.last_psk_handshake;
 	resp->need_handshake = psk_kex_need_handshake(peer);
 
-	pex_msg_send_ext(net, peer, /* address outside of tunnel */ addr);
-
+	psk_kex_send_msg(net, peer);
 	peer->kex_ctx.state = KEX_STATE_WAITING_FOR_STATUS_RESPONSE;
 }
+
+/* TODO: split this to avoid doing crypto again and again when we need to retransmit */
 
 static void
 psk_kex_start_key_exchange(struct network *net, struct network_peer *peer)
@@ -123,8 +177,6 @@ psk_kex_start_key_exchange(struct network *net, struct network_peer *peer)
 	if (peer->kex_ctx.role != PSK_KEX_ROLE_INITIATOR)
 		return;
 
-	/* TBD: Can we send two messages in a row without issues? */
-
 	/* First message (contains c1) */
 	pex_msg_init_ext(net, PEX_MSG_PSK_KEX_INITIATOR_MSG_PART1, true);
 	msg_a = pex_msg_append(sizeof(struct pex_psk_kex_initiator_msg_part1));
@@ -136,7 +188,7 @@ psk_kex_start_key_exchange(struct network *net, struct network_peer *peer)
 	sntrup761_enc(msg_a->c1, ctx->k1, peer->pqc_pub);
 	psk_kex_keygen(key, ctx->k1, sizeof(ctx->k1));
 
-	pex_msg_send_ext(net, peer, /* address outside of tunnel */ addr);
+	psk_kex_send_msg(net, peer);
 
 	/* Second message (contains encrypted ephemeral public key) */
 	pex_msg_init_ext(net, PEX_MSG_PSK_KEX_INITIATOR_MSG_PART2, true);
@@ -146,7 +198,7 @@ psk_kex_start_key_exchange(struct network *net, struct network_peer *peer)
 	memcpy(&msg_b->e_pub_enc, ctx->e_pub, sizeof(ctx->e_pub)); /* Copy the ephemeral public key to buf */
 	psk_kex_encrypt(msg_b->e_pub_enc, sizeof(msg_b->e_pub_enc), msg_b->e_pub_mac, msg_b->nonce, key); /* Encrypt + MAC the ephemeral public key */
 
-	pex_msg_send_ext(net, peer, /* address outside of tunnel */ addr);
+	psk_kex_send_msg(net, peer);
 
 	peer->kex_ctx.state = KEX_STATE_WAITING_FOR_RESPONDER_MSG_PART1;
 	return;
@@ -165,6 +217,7 @@ psk_kex_finish_key_exchange(struct network *net, struct network_peer *peer)
 	ctx->role = role;
 
 	peer->state.last_psk_handshake = time(NULL);
+	wg_peer_update(net, peer, WG_PEER_UPDATE);
 }
 
 static void
@@ -177,12 +230,16 @@ psk_kex_recv_status_msg(struct network *net, struct network_peer *peer,
 
 	switch (opcode) {
 	case PEX_MSG_PSK_KEX_STATUS_REQUEST:
+		D_PEER(net, peer, "recv status request");
+
 		/* if we're initiator, sent a request before and now receive one too,
 		 * just drop that. Responder has to respond to our request. */
 		if (ctx->state == KEX_STATE_WAITING_FOR_STATUS_RESPONSE && ctx->role == PSK_KEX_ROLE_INITIATOR)
 			return;
 		break;
 	case PEX_MSG_PSK_KEX_STATUS_RESPONSE:
+		D_PEER(net, peer, "recv status response");
+
 		/* Don't accept a response coming out of nowhere */
 		if (ctx->state != KEX_STATE_WAITING_FOR_STATUS_RESPONSE)
 			return;
@@ -190,8 +247,9 @@ psk_kex_recv_status_msg(struct network *net, struct network_peer *peer,
 	default: return;
 	}
 
-	we_need_handshake = psk_kex_needs_handshake(peer);
+	we_need_handshake = psk_kex_need_handshake(peer);
 	peer_needs_handshake = data->need_handshake;
+	D_PEER(net, peer, "handshake requirement: local %d remote %d", we_need_handshake, peer_needs_handshake);
 
 	if (opcode == PEX_MSG_PSK_KEX_STATUS_REQUEST) {
 		pex_msg_init_ext(net, PEX_MSG_PSK_KEX_STATUS_RESPONSE, true);
@@ -199,7 +257,8 @@ psk_kex_recv_status_msg(struct network *net, struct network_peer *peer,
 		resp->last_handshake_time = peer->state.last_psk_handshake;
 		resp->need_handshake = we_need_handshake;
 
-		pex_msg_send_ext(net, peer, /* address outside of tunnel */ addr);
+		D_PEER(net, peer, "respond to status request");
+		psk_kex_send_msg(net, peer);
 	}
 
 	/* do nothing in case no one needs a handshake */
@@ -259,7 +318,7 @@ psk_kex_recv_initiator_msg_part2(struct network *net, struct network_peer *peer,
 
 	sntrup761_enc(resp->c_enc, ctx->k2, ctx->e_pub);
 	psk_kex_encrypt(resp->c_enc, sizeof(resp->c_enc), resp->c_mac, resp->nonce, key);
-	pex_msg_send_ext(net, peer, /* address outside of tunnel */ addr);
+	psk_kex_send_msg(net, peer);
 
 	// ####################################
 
@@ -272,7 +331,7 @@ psk_kex_recv_initiator_msg_part2(struct network *net, struct network_peer *peer,
 	psk_kex_keygen(key, ctx->k2, sizeof(ctx->k2));
 	psk_kex_encrypt(resp->c_enc, sizeof(resp->c_enc), resp->c_mac, resp->nonce, key);
 
-	pex_msg_send_ext(net, peer, /* address outside of tunnel */ addr);
+	psk_kex_send_msg(net, peer);
 	psk_kex_finish_key_exchange(net, peer);
 }
 
@@ -346,8 +405,6 @@ void psk_kex_recv_msg(struct network *net, struct network_peer *peer, enum pex_o
 		break;
 	default: return;
 	}
-
-	// TBD: do we need to explicitly trigger a network update to use the new PSK or does that work automatically?
 }
 
 void gen_kex_hash(void)

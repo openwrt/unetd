@@ -336,6 +336,7 @@ void network_pex_init(struct network *net)
 	pex->fd.fd = -1;
 	INIT_LIST_HEAD(&pex->hosts);
 	pex->request_update_timer.cb = network_pex_request_update_cb;
+	pex->request_psk_kex_status_timer.cb = psk_kex_request_status_cb;
 }
 
 static void
@@ -980,6 +981,7 @@ void network_pex_close(struct network *net)
 	uint64_t now = unet_gettime();
 
 	uloop_timeout_cancel(&pex->request_update_timer);
+	uloop_timeout_cancel(&pex->request_psk_kex_status_timer);
 	list_for_each_entry_safe(host, tmp, &pex->hosts, list) {
 		if (host->timeout)
 			continue;
@@ -1129,7 +1131,9 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 	case PEX_MSG_PSK_KEX_INITIATOR_MSG_PART2:
 	case PEX_MSG_PSK_KEX_RESPONDER_MSG_PART1:
 	case PEX_MSG_PSK_KEX_RESPONDER_MSG_PART2:
-		peer = pex_msg_peer(net, hdr->id, true);
+		D_NET(net, "recv PSK_KEX msg op=%d", hdr->opcode);
+
+		peer = pex_msg_peer(net, hdr->id, false);
 		if (!peer)
 			break;
 

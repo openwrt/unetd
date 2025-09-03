@@ -27,6 +27,7 @@ struct network_pex {
 	struct list_head hosts;
 	int num_hosts;
 	struct uloop_timeout request_update_timer;
+	struct uloop_timeout request_psk_kex_status_timer;
 };
 
 enum network_stun_state {
