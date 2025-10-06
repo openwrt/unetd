@@ -13,8 +13,8 @@
 #include "unetd.h"
 #include "utils.h"
 #include "wg.h"
-#include <climits>
-#include <ctime>
+#include <limits.h>
+#include <time.h>
 #include <stdbool.h>
 #include <string.h>
 #include <arpa/inet.h>
@@ -106,9 +106,6 @@ void psk_kex_request_status_cb(struct uloop_timeout *t)
 	D_NET(net, "in %s", __func__);
 
 	uloop_timeout_set(t, HANDSHAKE_INTERVAL);
-
-	if (list_empty(&net->peers))
-		return;
 
 	D_NET(net, "Iterating over peers to request psk-kex status.");
 

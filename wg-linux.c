@@ -5,7 +5,7 @@
  * Based on wireguard-tools:
  *   Copyright (C) 2015-2020 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
  */
-#include "psk-kex.h"
+
 #define _GNU_SOURCE
 #include <stdbool.h>
 #include <stddef.h>
@@ -27,6 +27,7 @@
 #include <unl.h>
 
 #include "linux/wireguard.h"
+#include "psk-kex.h"
 #include "unetd.h"
 
 struct timespec64 {

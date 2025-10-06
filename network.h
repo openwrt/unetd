@@ -6,9 +6,16 @@
 #define __UNETD_NETWORK_H
 
 #include <netinet/in.h>
+#include <libubox/avl.h>
+#include <libubox/blob.h>
+#include <libubox/blobmsg.h>
+#include <libubox/vlist.h>
 #include <libubox/uloop.h>
 #include "curve25519.h"
 #include "sntrup761.h"
+#include "pex.h"
+#include "wg.h"
+#include "utils.h"
 
 enum network_type {
 	NETWORK_TYPE_FILE,

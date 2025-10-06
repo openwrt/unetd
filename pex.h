@@ -8,10 +8,12 @@
 #include <sys/socket.h>
 #include <libubox/uloop.h>
 #include "stun.h"
+#include "utils.h"
 
 #define NETWORK_PEX_HOSTS_LIMIT	128
 
 struct network;
+struct network_peer;
 
 struct network_pex_host {
 	struct list_head list;

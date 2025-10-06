@@ -6,8 +6,10 @@
 #define __UNETD_HOST_H
 
 #include "chacha20.h"
+#include "network.h"
 #include "psk-kex.h"
 #include "sntrup761.h"
+#include "utils.h"
 
 enum peer_endpoint_type {
 	ENDPOINT_TYPE_STATIC,

@@ -1,12 +1,14 @@
 #ifndef PSK_KEX_H
 #define PSK_KEX_H
 
-#include "network.h"
-#include "host.h"
+#include <libubox/uloop.h>
 #include "pex-msg.h"
 #include "stdint.h"
 #include "sntrup761.h"
 #include "utils.h"
+
+struct network;
+struct network_peer;
 
 #define MAC_LEN		8
 
