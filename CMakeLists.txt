@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.12)
 
 PROJECT(unetd C)
 
 
 SET(SOURCES
 	main.c network.c host.c service.c
-	pex.c pex-stun.c
+	pex.c pex-stun.c psk-kex.c
 	wg.c wg-user.c
 )
 
@@ -47,7 +47,7 @@ ELSE()
 ENDIF()
 
 ADD_DEFINITIONS(-DMLK_CONFIG_USE_NATIVE_BACKEND_ARITH)
-ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c auth-data.c chacha20.c pex-msg.c utils.c stun.c random.c sntrup761.c shake.c mldsa.c psk-kex.c)
+ADD_LIBRARY(unet SHARED curve25519.c siphash.c sha512.c fprime.c f25519.c ed25519.c edsign.c auth-data.c chacha20.c pex-msg.c utils.c stun.c random.c sntrup761.c shake.c mldsa.c)
 TARGET_LINK_LIBRARIES(unet ubox)
 
 ADD_EXECUTABLE(unetd ${SOURCES})
