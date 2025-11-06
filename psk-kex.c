@@ -171,8 +171,12 @@ psk_kex_start_key_exchange(struct network *net, struct network_peer *peer)
 	struct psk_kex_ctx *ctx = &peer->kex_ctx;
 	uint8_t key[CHACHA20_KEY_SIZE];
 
+	D_PEER(net, peer, "in psk_kex_start_key_exchange");
+
 	if (peer->kex_ctx.role != PSK_KEX_ROLE_INITIATOR)
 		return;
+
+	D_PEER(net, peer, "starting key exchange");
 
 	/* First message (contains c1) */
 	pex_msg_init_ext(net, PEX_MSG_PSK_KEX_INITIATOR_MSG_PART1, true);
@@ -185,6 +189,7 @@ psk_kex_start_key_exchange(struct network *net, struct network_peer *peer)
 	sntrup761_enc(msg_a->c1, ctx->k1, peer->pqc_pub);
 	psk_kex_keygen(key, ctx->k1, sizeof(ctx->k1));
 
+	D_PEER(net, peer, "sending first message to peer");
 	psk_kex_send_msg(net, peer);
 
 	/* Second message (contains encrypted ephemeral public key) */
@@ -195,6 +200,7 @@ psk_kex_start_key_exchange(struct network *net, struct network_peer *peer)
 	memcpy(&msg_b->e_pub_enc, ctx->e_pub, sizeof(ctx->e_pub)); /* Copy the ephemeral public key to buf */
 	psk_kex_encrypt(msg_b->e_pub_enc, sizeof(msg_b->e_pub_enc), msg_b->e_pub_mac, msg_b->nonce, key); /* Encrypt + MAC the ephemeral public key */
 
+	D_PEER(net, peer, "sending second message to peer");
 	psk_kex_send_msg(net, peer);
 
 	peer->kex_ctx.state = KEX_STATE_WAITING_FOR_RESPONDER_MSG_PART1;
@@ -224,6 +230,8 @@ psk_kex_recv_status_msg(struct network *net, struct network_peer *peer,
 	struct pex_psk_kex_status *resp;
 	struct psk_kex_ctx *ctx = &peer->kex_ctx;
 	bool we_need_handshake, peer_needs_handshake;
+
+	D_PEER(net, peer, "received status message opcode %d", opcode);
 
 	switch (opcode) {
 	case PEX_MSG_PSK_KEX_STATUS_REQUEST:
@@ -372,6 +380,8 @@ void psk_kex_recv_msg(struct network *net, struct network_peer *peer, enum pex_o
 {
 	if (peer->kex_ctx.role == PSK_KEX_ROLE_NONE)
 		return;
+
+	D_PEER(net, peer, "received pex psk-kex message");
 
 	switch (opcode) {
 	case PEX_MSG_PSK_KEX_STATUS_REQUEST:
