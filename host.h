@@ -121,7 +121,7 @@ network_host_uses_peer_route(struct network_host *host, struct network *net,
 
 #define for_each_routed_host(cur_host, net, peer)			\
 	avl_for_each_element(&(net)->hosts, cur_host, node)		\
-		if (network_host_uses_peer_route(host, net, peer))
+		if (network_host_uses_peer_route(cur_host, net, peer))
 
 
 void network_hosts_update_start(struct network *net);
