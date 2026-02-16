@@ -99,4 +99,9 @@ static inline bool network_pex_active(struct network_pex *pex)
 
 int global_pex_open(const char *unix_path);
 
+struct pex_hdr *pex_msg_init(struct network *net, uint8_t opcode);
+struct pex_hdr *pex_msg_init_ext(struct network *net, uint8_t opcode, bool ext);
+void pex_msg_send_ext(struct network *net, struct network_peer *peer,
+					  struct sockaddr_in6 *addr);
+
 #endif

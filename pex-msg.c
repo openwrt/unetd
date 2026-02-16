@@ -353,8 +353,8 @@ pex_msg_update_response_fill(struct pex_msg_update_send_ctx *ctx)
 	int ofs = hdr->len + sizeof(struct pex_hdr);
 	int cur_len = ctx->rem;
 
-	if (cur_len > PEX_BUF_SIZE - ofs)
-		cur_len = PEX_BUF_SIZE - ofs;
+	if (cur_len > PEX_DATA_MSG_MAX - ofs)
+		cur_len = PEX_DATA_MSG_MAX - ofs;
 
 	memcpy(pex_msg_append(cur_len), ctx->cur, cur_len);
 	ctx->cur += cur_len;

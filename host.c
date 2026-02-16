@@ -4,6 +4,10 @@
  */
 #include <libubox/avl-cmp.h>
 #include <libubox/blobmsg_json.h>
+#include <libubox/utils.h>
+#include <string.h>
+#include "random.h"
+#include "sntrup761.h"
 #include "unetd.h"
 
 static LIST_HEAD(old_hosts);
@@ -85,6 +89,11 @@ network_peer_update(struct vlist_tree *tree,
 
 	if (h_new && h_old) {
 		memcpy(&h_new->state, &h_old->state, sizeof(h_new->state));
+		if (h_old->kex_ctx.role != PEX_PQC_ROLE_NONE &&
+		    h_new->kex_ctx.role != PEX_PQC_ROLE_NONE) {
+			memcpy(&h_new->kex_ctx, &h_old->kex_ctx, sizeof(h_new->kex_ctx));
+			memcpy(h_new->psk, h_old->psk, sizeof(h_new->psk));
+		}
 
 		if (network_peer_equal(h_new, h_old)) {
 			if (!network_peer_gateway_equal(h_new, h_old)) {
@@ -167,6 +176,7 @@ network_host_add_group(struct network *net, struct network_host *host,
 
 enum {
 	NETWORK_HOST_KEY,
+	NETWORK_HOST_PQC_KEY,
 	NETWORK_HOST_GROUPS,
 	NETWORK_HOST_IPADDR,
 	NETWORK_HOST_SUBNET,
@@ -180,6 +190,7 @@ enum {
 
 static const struct blobmsg_policy host_policy[__NETWORK_HOST_MAX] = {
 	[NETWORK_HOST_KEY] = { "key", BLOBMSG_TYPE_STRING },
+	[NETWORK_HOST_PQC_KEY] = { "pqc-key", BLOBMSG_TYPE_STRING },
 	[NETWORK_HOST_GROUPS] = { "groups", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_HOST_IPADDR] = { "ipaddr", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_HOST_SUBNET] = { "subnet", BLOBMSG_TYPE_ARRAY },
@@ -196,11 +207,13 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 	struct blob_attr *tb[__NETWORK_HOST_MAX];
 	struct blob_attr *cur, *ipaddr, *subnet, *meta;
 	uint8_t key[CURVE25519_KEY_SIZE];
+	uint8_t pqc_key[SNTRUP761_PUB_SIZE] = {0};
 	struct network_host *host = NULL;
 	struct network_peer *peer;
 	size_t ipaddr_len, subnet_len, meta_len;
 	const char *endpoint, *gateway;
 	char *endpoint_buf, *gateway_buf;
+	bool has_pqc_key = false;
 	int rem;
 
 	blobmsg_parse(host_policy, __NETWORK_HOST_MAX, tb, blobmsg_data(attr), blobmsg_len(attr));
@@ -236,6 +249,11 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 	if (b64_decode(blobmsg_get_string(tb[NETWORK_HOST_KEY]), key,
 		       sizeof(key)) != sizeof(key))
 		return;
+
+	if (tb[NETWORK_HOST_PQC_KEY] &&
+	    b64_decode(blobmsg_get_string(tb[NETWORK_HOST_PQC_KEY]),
+		       pqc_key, SNTRUP761_PUB_SIZE) == SNTRUP761_PUB_SIZE)
+		has_pqc_key = true;
 
 	if (dynamic) {
 		struct network_dynamic_peer *dyn_peer;
@@ -298,6 +316,21 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 		peer->meta = memcpy(meta, cur, meta_len);
 	memcpy(peer->key, key, sizeof(key));
 
+	/*
+	 * If a PQC key is defined, initialize with random PSK to prevent accidental
+	 * wireguard handshakes without the extra key from the PQC handshake.
+	 */
+	if (has_pqc_key && net->config.has_pqc_sec) {
+		if (net->config.type != NETWORK_TYPE_DYNAMIC) {
+			D_NET(net, "PQC key exchange requires a dynamic network");
+		} else {
+			memcpy(peer->pqc_pub, pqc_key, sizeof(pqc_key));
+			randombytes(peer->psk, sizeof(peer->psk));
+
+			pex_pqc_ctx_init(net, peer);
+		}
+	}
+
 	memcpy(&peer->local_addr.network_id,
 		   &net->net_config.addr.network_id,
 		   sizeof(peer->local_addr.network_id));
@@ -319,6 +352,14 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 
 	avl_insert(&net->hosts, &host->node);
 	if (!memcmp(peer->key, net->config.pubkey, sizeof(key))) {
+		if (net->config.has_pqc_sec && has_pqc_key) {
+			uint8_t derived_pub[SNTRUP761_PUB_SIZE];
+
+			sntrup761_pubkey(derived_pub, net->config.pqc_sec);
+			if (memcmp(derived_pub, pqc_key, sizeof(derived_pub)))
+				D_NET(net, "pqc-key in network data does not match pqc_key in config");
+		}
+
 		if (!net->prev_local_host ||
 		    !network_peer_equal(&net->prev_local_host->peer, &host->peer))
 			net->net_config.local_host_changed = true;
@@ -524,11 +565,19 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 		host->peer.state.num_net_queries = 0;
 	net->num_net_queries = 0;
 
-	if (!net->net_config.keepalive || !net->net_config.local_host) {
-		/* keep the timer alive, it resets the query rate limits above */
-		uloop_timeout_set(t, 1000);
-		return;
+	/* keep the timer alive on early exit, it resets the query rate limits above */
+	if (!net->net_config.local_host)
+		goto rearm;
+
+	vlist_for_each_element(&net->peers, peer, node) {
+		if (peer->kex_ctx.role == PEX_PQC_ROLE_NONE || peer->indirect)
+			continue;
+
+		pex_pqc_poll(net, peer);
 	}
+
+	if (!net->net_config.keepalive)
+		goto rearm;
 
 	wg_peer_refresh(net);
 
@@ -549,6 +598,7 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 
 	network_pex_event(net, NULL, PEX_EV_QUERY);
 
+rearm:
 	uloop_timeout_set(t, 1000);
 }
 

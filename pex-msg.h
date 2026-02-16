@@ -4,12 +4,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include "chacha20.h"
 #include "curve25519.h"
+#include "sntrup761.h"
 #include "siphash.h"
 #include "utils.h"
 
 #define UNETD_GLOBAL_PEX_PORT		51819
-#define PEX_BUF_SIZE			1024
+/* sized to fit the largest PQC handshake message below the IPv6 minimum MTU */
+#define PEX_BUF_SIZE			1280
+/* keep chunked update-response datagrams below a common path MTU */
+#define PEX_DATA_MSG_MAX		1024
 #define PEX_RX_BUF_SIZE			16384
 #define UNETD_NET_DATA_SIZE_MAX		(128 * 1024)
 
@@ -27,6 +32,12 @@ enum pex_opcode {
 	PEX_MSG_ENDPOINT_PORT_NOTIFY,
 	PEX_MSG_ENROLL,
 	PEX_MSG_UPDATE_RESPONSE_REFUSED,
+
+	PEX_MSG_PQC_M1A,
+	PEX_MSG_PQC_M1B,
+	PEX_MSG_PQC_M2A,
+	PEX_MSG_PQC_M2B,
+	PEX_MSG_PQC_M1_REJECT,
 };
 
 #define PEX_ID_LEN		8
