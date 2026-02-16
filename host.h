@@ -5,6 +5,10 @@
 #ifndef __UNETD_HOST_H
 #define __UNETD_HOST_H
 
+#include "chacha20.h"
+#include "pex-pqc.h"
+#include "sntrup761.h"
+
 enum peer_endpoint_type {
 	ENDPOINT_TYPE_STATIC,
 	ENDPOINT_TYPE_PEX,
@@ -16,6 +20,11 @@ enum peer_endpoint_type {
 struct network_peer {
 	struct vlist_node node;
 	uint8_t key[CURVE25519_KEY_SIZE];
+
+	uint8_t pqc_pub[SNTRUP761_PUB_SIZE];
+	uint8_t psk[CHACHA20_KEY_SIZE];
+	struct pex_pqc_ctx kex_ctx;
+
 	union network_addr local_addr;
 	const char *endpoint;
 	struct blob_attr *ipaddr;
@@ -42,6 +51,8 @@ struct network_peer {
 		uint64_t last_handshake;
 		uint64_t last_request;
 		uint64_t last_query_sent;
+		uint64_t last_psk_handshake;
+		uint64_t last_pqc_init_time;
 
 		int ping_wait;
 		int last_handshake_diff;

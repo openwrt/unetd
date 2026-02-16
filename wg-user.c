@@ -21,6 +21,7 @@
 #include <time.h>
 #include <netdb.h>
 #include "unetd.h"
+#include "pex-pqc.h"
 
 #define SOCK_PATH RUNSTATEDIR "/wireguard/"
 #define SOCK_SUFFIX ".sock"
@@ -343,6 +344,12 @@ wg_user_peer_update(struct network *net, struct network_peer *peer, enum wg_upda
 	}
 
 	wg_req_set(&req, "replace_allowed_ips", "true");
+	if (peer->kex_ctx.role != PEX_PQC_ROLE_NONE) {
+		char psk_hex[WG_KEY_LEN_HEX];
+
+		key_to_hex(psk_hex, peer->psk);
+		wg_req_set(&req, "preshared_key", psk_hex);
+	}
 	wg_user_peer_req_add_allowed_ip(&req, peer);
 	for_each_routed_host(host, net, peer)
 		wg_user_peer_req_add_allowed_ip(&req, &host->peer);

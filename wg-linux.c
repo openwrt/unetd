@@ -27,6 +27,7 @@
 
 #include "linux/wireguard.h"
 #include "unetd.h"
+#include "pex-pqc.h"
 
 struct timespec64 {
 	int64_t tv_sec;
@@ -233,6 +234,8 @@ wg_linux_peer_update(struct network *net, struct network_peer *peer, enum wg_upd
 	}
 
 	nla_put_u32(req.msg, WGPEER_A_FLAGS, WGPEER_F_REPLACE_ALLOWEDIPS);
+	if (peer->kex_ctx.role != PEX_PQC_ROLE_NONE)
+		nla_put(req.msg, WGPEER_A_PRESHARED_KEY, WG_KEY_LEN, peer->psk);
 
 	req.ips = nla_nest_start(req.msg, WGPEER_A_ALLOWEDIPS);
 

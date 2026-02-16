@@ -50,6 +50,7 @@ const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 	[NETWORK_ATTR_TYPE] = { "type", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_AUTH_KEY] = { "auth_key", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_KEY] = { "key", BLOBMSG_TYPE_STRING },
+	[NETWORK_ATTR_PQC_KEY] = { "pqc_key", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_FILE] = { "file", BLOBMSG_TYPE_STRING },
 	[NETWORK_ATTR_DATA] = { "data", BLOBMSG_TYPE_TABLE },
 	[NETWORK_ATTR_INTERFACE] = { "interface", BLOBMSG_TYPE_STRING },
@@ -595,6 +596,7 @@ void network_get_config(struct network *net, struct blob_buf *buf)
 	blobmsg_parse_attr(network_policy, __NETWORK_ATTR_MAX, tb,
 			   net->config.data);
 	tb[NETWORK_ATTR_KEY] = NULL;
+	tb[NETWORK_ATTR_PQC_KEY] = NULL;
 	for (size_t i = 0; i < ARRAY_SIZE(tb); i++)
 		if (tb[i])
 			blobmsg_add_blob(buf, tb[i]);
@@ -691,6 +693,14 @@ network_set_config(struct network *net, struct blob_attr *config)
 		goto invalid;
 
 	curve25519_generate_public(net->config.pubkey, net->config.key);
+
+	if ((cur = tb[NETWORK_ATTR_PQC_KEY]) != NULL) {
+		if (b64_decode(blobmsg_get_string(cur), net->config.pqc_sec,
+			       sizeof(net->config.pqc_sec)) != sizeof(net->config.pqc_sec))
+			goto invalid;
+
+		net->config.has_pqc_sec = true;
+	}
 
 	if (network_setup(net))
 		goto invalid;

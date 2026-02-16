@@ -2,6 +2,8 @@
 /*
  * Copyright (C) 2022 Felix Fietkau <nbd@nbd.name>
  */
+#include <stdbool.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -13,8 +15,9 @@
 #include <stdlib.h>
 #include <inttypes.h>
 #include "unetd.h"
-#include "pex-msg.h"
 #include "enroll.h"
+#include "random.h"
+#include "sha512.h"
 
 static const char *pex_peer_id_str(const uint8_t *key)
 {
@@ -27,13 +30,13 @@ static const char *pex_peer_id_str(const uint8_t *key)
 	return str;
 }
 
-static struct pex_hdr *
+struct pex_hdr *
 pex_msg_init(struct network *net, uint8_t opcode)
 {
 	return __pex_msg_init(net->config.pubkey, opcode);
 }
 
-static struct pex_hdr *
+struct pex_hdr *
 pex_msg_init_ext(struct network *net, uint8_t opcode, bool ext)
 {
 	return __pex_msg_init_ext(net->config.pubkey, net->config.auth_key, opcode, ext);
@@ -81,7 +84,7 @@ static void pex_msg_send(struct network *net, struct network_peer *peer)
 		D_PEER(net, peer, "pex_msg_send failed: %s", strerror(errno));
 }
 
-static void pex_msg_send_ext(struct network *net, struct network_peer *peer,
+void pex_msg_send_ext(struct network *net, struct network_peer *peer,
 			     struct sockaddr_in6 *addr)
 {
 	char addrbuf[INET6_ADDRSTRLEN];
@@ -703,6 +706,11 @@ network_pex_recv(struct network *net, struct network_peer *peer, struct pex_hdr 
 		break;
 	case PEX_MSG_ENDPOINT_NOTIFY:
 		break;
+	case PEX_MSG_PQC_M1A:
+	case PEX_MSG_PQC_M1B:
+	case PEX_MSG_PQC_M2A:
+	case PEX_MSG_PQC_M2B:
+		break;
 	}
 }
 
@@ -1107,6 +1115,16 @@ global_pex_recv(void *msg, size_t msg_len, struct sockaddr_in6 *addr)
 	case PEX_MSG_ENROLL:
 		pex_enroll_recv(data, hdr->len, addr);
 		break;
+	case PEX_MSG_PQC_M1A:
+	case PEX_MSG_PQC_M1B:
+	case PEX_MSG_PQC_M2A:
+	case PEX_MSG_PQC_M2B:
+		peer = pex_msg_peer(net, hdr->id, true);
+		if (!peer)
+			break;
+
+		pex_pqc_recv(net, peer, hdr->opcode, data, hdr->len);
+		break;
 	}
 }
 
@@ -1140,5 +1158,6 @@ int global_pex_open(const char *unix_path)
 	if (unix_path)
 		pex_unix_open(unix_path, pex_recv_control);
 
+	pex_pqc_hash_init();
 	return ret;
 }
