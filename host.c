@@ -121,7 +121,7 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 	uint8_t key[CURVE25519_KEY_SIZE];
 	struct network_host *host = NULL;
 	struct network_peer *peer;
-	int ipaddr_len, subnet_len, meta_len;
+	size_t ipaddr_len, subnet_len, meta_len;
 	const char *endpoint, *gateway;
 	char *endpoint_buf, *gateway_buf;
 	int rem;
