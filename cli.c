@@ -553,6 +553,10 @@ static bool parse_seed(uint8_t *dest, const char *salt)
 			len = strlen(pw);
 
 		if (pw && password_prompt > 1) {
+			if (len >= sizeof(buf)) {
+				INFO("Password too long\n");
+				return false;
+			}
 			pw = strcpy(buf, pw);
 			pw2 = getpass("Retype password: ");
 			if (!pw2 || strcmp(pw, pw2) != 0) {
