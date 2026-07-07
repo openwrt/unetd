@@ -479,7 +479,8 @@ network_do_update(struct network *net, bool up)
 			execvp(argv[0], (char **)argv);
 			exit(1);
 		}
-		waitpid(pid, &stat, 0);
+		if (pid > 0)
+			waitpid(pid, &stat, 0);
 	}
 
 	if (!net->config.interface)
