@@ -158,13 +158,19 @@ bool token_parse(struct blob_buf *buf, const char *token)
 	struct network *net;
 	bool ret = false;
 	size_t len;
+	int declen;
 	void *data;
 
 	len = B64_DECODE_LEN(strlen(token));
 	hdr = malloc(len);
-	len = b64_decode(token, hdr, len);
-	if (len <= sizeof(*hdr) + sizeof(struct blob_attr))
+	if (!hdr)
 		goto out;
+
+	declen = b64_decode(token, hdr, len);
+	if (declen <= (int)(sizeof(*hdr) + sizeof(struct blob_attr)))
+		goto out;
+
+	len = declen;
 
 	data = hdr + 1;
 	len -= sizeof(*hdr);
