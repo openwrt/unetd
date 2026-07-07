@@ -524,8 +524,11 @@ network_hosts_connect_cb(struct uloop_timeout *t)
 		host->peer.state.num_net_queries = 0;
 	net->num_net_queries = 0;
 
-	if (!net->net_config.keepalive || !net->net_config.local_host)
+	if (!net->net_config.keepalive || !net->net_config.local_host) {
+		/* keep the timer alive, it resets the query rate limits above */
+		uloop_timeout_set(t, 1000);
 		return;
+	}
 
 	wg_peer_refresh(net);
 
