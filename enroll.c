@@ -570,6 +570,8 @@ enroll_send_server_confirm(struct enroll_peer *peer, struct blob_attr *meta)
 
 void pex_enroll_recv(void *data, size_t len, struct sockaddr_in6 *addr)
 {
+	/* struct enroll_msg_hdr is 73 bytes, realign the payload for blobmsg parsing */
+	static char payload[PEX_RX_BUF_SIZE] __attribute__((aligned(8)));
 	const struct enroll_msg_hdr *hdr = data;
 	struct enroll_msg_key_data key_data = {};
 	uint8_t hmac[SHA512_HASH_SIZE];
@@ -581,6 +583,11 @@ void pex_enroll_recv(void *data, size_t len, struct sockaddr_in6 *addr)
 
 	data += sizeof(*hdr);
 	len -= sizeof(*hdr);
+	if (len > sizeof(payload))
+		return;
+
+	memcpy(payload, data, len);
+	data = payload;
 
 	if (!memcmp(hdr->pubkey, state->pubkey, sizeof(hdr->pubkey)))
 		return;
