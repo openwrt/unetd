@@ -42,6 +42,27 @@ wg_peer_set_connected(struct network *net, struct network_peer *peer, bool val)
 	network_services_peer_update(net, peer);
 }
 
+int wg_peer_refresh(struct network *net)
+{
+	struct network_peer *peer;
+
+	vlist_for_each_element(&net->peers, peer, node) {
+		if (peer->indirect)
+			continue;
+
+		peer->state.handshake = false;
+		peer->state.idle++;
+		if (peer->state.ping_wait > 0)
+			peer->state.ping_wait--;
+		if (peer->state.idle >= 2 * net->net_config.keepalive)
+			wg_peer_set_connected(net, peer, false);
+		if (peer->state.idle > net->net_config.keepalive)
+			network_pex_event(net, peer, PEX_EV_PING);
+	}
+
+	return net->wg.ops->peer_refresh(net);
+}
+
 struct network_peer *wg_peer_update_start(struct network *net, const uint8_t *key)
 {
 	struct network_peer *peer;
@@ -50,22 +71,16 @@ struct network_peer *wg_peer_update_start(struct network *net, const uint8_t *ke
 	if (!peer || peer->indirect)
 		return NULL;
 
-	peer->state.handshake = false;
-	peer->state.idle++;
-	if (peer->state.ping_wait > 0)
-		peer->state.ping_wait--;
-	if (peer->state.idle >= 2 * net->net_config.keepalive)
-		wg_peer_set_connected(net, peer, false);
-	if (peer->state.idle > net->net_config.keepalive)
-		network_pex_event(net, peer, PEX_EV_PING);
-
 	return peer;
 }
 
 void wg_peer_update_done(struct network *net, struct network_peer *peer)
 {
-	if (peer->state.handshake)
-		network_pex_event(net, peer, PEX_EV_HANDSHAKE);
+	if (!peer->state.handshake)
+		return;
+
+	peer->state.handshake = false;
+	network_pex_event(net, peer, PEX_EV_HANDSHAKE);
 }
 
 void wg_peer_set_last_handshake(struct network *net, struct network_peer *peer,

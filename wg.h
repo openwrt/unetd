@@ -42,11 +42,11 @@ extern const struct wg_ops wg_linux_ops;
 
 int wg_init_network(struct network *net);
 void wg_cleanup_network(struct network *net);
+int wg_peer_refresh(struct network *net);
 
 #define wg_init_local(net, ...)		(net)->wg.ops->init_local(net, ##__VA_ARGS__)
 #define wg_peer_update(net, ...)	(net)->wg.ops->peer_update(net, ##__VA_ARGS__)
 #define wg_peer_connect(net, ...)	(net)->wg.ops->peer_connect(net, ##__VA_ARGS__)
-#define wg_peer_refresh(net)		(net)->wg.ops->peer_refresh(net)
 
 /* internal */
 struct network_peer *wg_peer_update_start(struct network *net, const uint8_t *key);
