@@ -269,14 +269,15 @@ wg_linux_parse_peer(struct network *net, struct nlattr *data, time_t now)
 	nla_parse_nested(tb, WGPEER_A_MAX, data, NULL);
 
 	cur = tb[WGPEER_A_PUBLIC_KEY];
-	if (!cur)
+	if (!cur || nla_len(cur) < WG_KEY_LEN)
 		return;
 
 	peer = wg_peer_update_start(net, nla_data(cur));
 	if (!peer)
 		return;
 
-	if ((cur = tb[WGPEER_A_LAST_HANDSHAKE_TIME]) != NULL) {
+	if ((cur = tb[WGPEER_A_LAST_HANDSHAKE_TIME]) != NULL &&
+	    nla_len(cur) >= sizeof(struct timespec64)) {
 		struct timespec64 *tv = nla_data(cur);
 
 		wg_peer_set_last_handshake(net, peer, now, tv->tv_sec);
