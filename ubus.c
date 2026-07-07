@@ -530,6 +530,7 @@ ubus_token_create(struct ubus_context *ctx, struct ubus_object *obj,
 	str_buf = blobmsg_alloc_string_buffer(&b, "token", B64_ENCODE_LEN(len));
 	b64_encode(token, len, str_buf, B64_ENCODE_LEN(len));
 	blobmsg_add_string_buffer(&b);
+	free(token);
 
 	ubus_send_reply(ctx, req, b.head);
 
