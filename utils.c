@@ -105,7 +105,7 @@ int network_get_subnet(int af, union network_addr *addr, int *mask, const char *
 		*(sep++) = 0;
 
 		val = strtoul(sep, &end, 0);
-		if ((end && *end) || val > *mask)
+		if (end == sep || (end && *end) || val > *mask)
 			goto out;
 
 		*mask = val;
