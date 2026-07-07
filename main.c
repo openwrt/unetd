@@ -110,6 +110,7 @@ void unetd_write_hosts(void)
 {
 	struct network *net;
 	char *tmpfile = NULL;
+	bool err;
 	FILE *f;
 	int fd;
 
@@ -135,7 +136,11 @@ void unetd_write_hosts(void)
 	avl_for_each_element(&networks, net, node)
 		network_write_hosts(net, f);
 
-	fclose(f);
+	err = ferror(f);
+	if (fclose(f) || err) {
+		unlink(tmpfile);
+		goto out;
+	}
 
 	if (rename(tmpfile, hosts_file))
 		unlink(tmpfile);
