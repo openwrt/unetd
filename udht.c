@@ -566,11 +566,12 @@ udht_save_nodes(const char *filename)
 
 static int usage(const char *progname)
 {
-	fprintf(stderr, "Usage: %s [<options>] <id string>\n"
+	fprintf(stderr, "Usage: %s [<options>] -u <socket> <id string>\n"
 		"Options:\n"
 		"	-d			Enable debug mode\n"
 		"	-n <file>		Set node filename\n"
 		"	-N <key>		Add network key\n"
+		"	-u <socket>		Set unetd unix socket path\n"
 		"\n",
 		progname);
 	return 1;
@@ -664,7 +665,7 @@ int main(int argc, char **argv)
 	argv += optind;
 	argc -= optind;
 
-	if (argc != 1)
+	if (argc != 1 || !unix_path)
 		return usage(progname);
 
 	udht_id_hash(local_id, argv[0], strlen(argv[0]));
