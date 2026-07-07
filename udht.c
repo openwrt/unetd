@@ -531,6 +531,7 @@ udht_load_nodes(const char *filename)
 	}
 
 out:
+	fclose(f);
 	free(data);
 }
 
