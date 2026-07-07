@@ -214,7 +214,7 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 
 	meta_len = tb[NETWORK_HOST_META] ? blob_pad_len(tb[NETWORK_HOST_META]) : 0;
 	if (meta_len &&
-	    blobmsg_check_array(tb[NETWORK_HOST_META], BLOBMSG_TYPE_STRING) < 0)
+	    blobmsg_check_array(tb[NETWORK_HOST_META], BLOBMSG_TYPE_UNSPEC) < 0)
 		meta_len = 0;
 
 	if ((cur = tb[NETWORK_HOST_ENDPOINT]) != NULL)
