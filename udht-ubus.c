@@ -85,54 +85,48 @@ udht_ubus_unetd_cb(struct ubus_context *ctx, struct ubus_object *obj,
 }
 
 static void
-udht_subscribe_unetd(struct ubus_context *ctx)
+udht_ubus_setup_cb(struct uloop_timeout *t)
 {
-	static struct ubus_subscriber sub = {
-		.cb = udht_ubus_unetd_cb
-	};
+	struct ubus_context *ctx = &conn.ctx;
 	uint32_t id;
-
-	if (!sub.obj.id && ubus_register_subscriber(ctx, &sub))
-		return;
 
 	if (ubus_lookup_id(ctx, "unetd", &id))
 		return;
 
-	ubus_subscribe(ctx, &sub, id);
-
 	/* ensure that unetd's socket is ready by testing if it's reachable over ubus */
-	if (ubus_invoke(ctx, id, "network_get", b.head, NULL, NULL, 10000))
+	if (ubus_invoke(ctx, id, "network_get", b.head, NULL, NULL, 10000)) {
+		uloop_timeout_set(t, 1000);
 		return;
+	}
 
 	udht_reconnect();
 	udht_ubus_update_networks(ctx);
 }
 
-static void
-udht_ubus_event_cb(struct ubus_context *ctx, struct ubus_event_handler *ev,
-		   const char *type, struct blob_attr *msg)
+static struct uloop_timeout setup_timer = {
+	.cb = udht_ubus_setup_cb,
+};
+
+static bool
+udht_ubus_new_obj_cb(struct ubus_context *ctx, struct ubus_subscriber *s,
+		     const char *path)
 {
-	static const struct blobmsg_policy policy =
-		{ "path", BLOBMSG_TYPE_STRING };
-	struct blob_attr *attr;
+	if (!path || strcmp(path, "unetd") != 0)
+		return false;
 
-	blobmsg_parse(&policy, 1, &attr, blobmsg_data(msg), blobmsg_len(msg));
-	if (!attr)
-		return;
-
-	if (!strcmp(blobmsg_get_string(attr), "unetd"))
-		udht_subscribe_unetd(ctx);
+	uloop_timeout_set(&setup_timer, 100);
+	return true;
 }
+
+static struct ubus_subscriber sub = {
+	.cb = udht_ubus_unetd_cb,
+	.new_obj_cb = udht_ubus_new_obj_cb,
+};
 
 static void
 ubus_connect_handler(struct ubus_context *ctx)
 {
-	static struct ubus_event_handler ev = {
-		.cb = udht_ubus_event_cb,
-	};
-
-	ubus_register_event_handler(ctx, &ev, "ubus.object.add");
-	udht_subscribe_unetd(ctx);
+	ubus_register_subscriber(ctx, &sub);
 }
 
 void udht_ubus_init(void)
