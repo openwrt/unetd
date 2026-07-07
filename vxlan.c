@@ -177,6 +177,18 @@ vxlan_tunnel_teardown(struct vxlan_tunnel *vt)
 	rtnl_call(msg);
 }
 
+static void
+vxlan_tunnel_free(struct vxlan_tunnel *vt)
+{
+	if (!vt)
+		return;
+
+	vxlan_tunnel_teardown(vt);
+	free(vt->forward_ports);
+	free(vt->cur_forward_ports);
+	free(vt);
+}
+
 static const char *
 vxlan_find_ifname(struct network *net, const char *service)
 {
@@ -315,36 +327,38 @@ vxlan_init(struct network *net, struct network_service *s,
 	};
 	struct blob_attr *tb[__VXCFG_ATTR_MAX] = {};
 	struct blob_attr *cur;
-	struct vxlan_tunnel *vt = s->vxlan;
+	struct vxlan_tunnel *vt = NULL;
 	const char *name;
 
 	if (s_old) {
 		vt = s_old->vxlan;
 		s_old->vxlan = NULL;
-		if (!vt)
-			return;
+	}
 
-		if (vxlan_config_equal(s, s_old)) {
+	name = vxlan_find_ifname(net, network_service_name(s));
+	if (!name) {
+		D_SERVICE(net, s, "no configured tunnel ifname");
+		vxlan_tunnel_free(vt);
+		return;
+	}
+
+	if (vt) {
+		if (!strcmp(vt->ifname, name) && vxlan_config_equal(s, s_old)) {
 			s->vxlan = vt;
 			vt->s = s;
 			return;
 		}
 
 		vxlan_tunnel_teardown(vt);
-		goto init;
+	} else {
+		vt = calloc(1, sizeof(*vt));
+		if (!vt)
+			return;
+
+		vt->net = net;
 	}
 
-	name = vxlan_find_ifname(net, network_service_name(s));
-	if (!name) {
-		D_SERVICE(net, s, "no configured tunnel ifname");
-		return;
-	}
-
-	vt = calloc(1, sizeof(*s->vxlan));
 	snprintf(vt->ifname, sizeof(vt->ifname), "%s", name);
-	vt->net = net;
-
-init:
 	s->vxlan = vt;
 	vt->s = s;
 	if (s->config)
@@ -373,16 +387,8 @@ init:
 static void
 vxlan_free(struct network *net, struct network_service *s)
 {
-	struct vxlan_tunnel *vt = s->vxlan;
-
-	if (!vt)
-		return;
-
-	vxlan_tunnel_teardown(vt);
+	vxlan_tunnel_free(s->vxlan);
 	s->vxlan = NULL;
-	free(vt->forward_ports);
-	free(vt->cur_forward_ports);
-	free(vt);
 }
 
 const struct service_ops vxlan_ops = {
