@@ -500,6 +500,8 @@ void *pex_msg_update_response_recv(const void *data, int len, enum pex_opcode op
 		ctx->data_len = be32_to_cpu(res->data_len);
 		memcpy(ctx->e_key, res->e_key, sizeof(ctx->e_key));
 		ctx->data = malloc(ctx->data_len);
+		if (!ctx->data)
+			goto error;
 	} else if (op == PEX_MSG_UPDATE_RESPONSE_DATA) {
 		const struct pex_update_response_data *res = data;
 
