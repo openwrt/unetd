@@ -219,7 +219,9 @@ int main(int argc, char **argv)
 
 	unetd_ubus_init();
 	unetd_write_hosts();
-	global_pex_open(unix_socket);
+	if (global_pex_open(unix_socket) < 0)
+		fprintf(stderr, "Failed to open global PEX port %d\n",
+			global_pex_port);
 	add_networks();
 	uloop_run();
 	pex_close();
