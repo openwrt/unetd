@@ -364,7 +364,7 @@ wg_linux_peer_connect(struct network *net, struct network_peer *peer,
 }
 
 const struct wg_ops wg_linux_ops = {
-	.name = "user",
+	.name = "linux",
 	.init = wg_linux_init,
 	.cleanup = wg_linux_cleanup,
 	.init_local = wg_linux_init_local,
