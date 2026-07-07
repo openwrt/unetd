@@ -104,8 +104,13 @@ void wg_peer_set_rx_bytes(struct network *net, struct network_peer *peer,
 			  uint64_t bytes)
 {
 	int64_t diff = bytes - peer->state.rx_bytes;
+	bool first = !peer->state.has_rx_bytes;
 
+	peer->state.has_rx_bytes = true;
 	peer->state.rx_bytes = bytes;
+	if (first)
+		return;
+
 	if (diff > 0) {
 		peer->state.idle = 0;
 		wg_peer_set_connected(net, peer, true);

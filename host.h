@@ -31,6 +31,7 @@ struct network_peer {
 		int connect_attempt;
 		bool connected;
 		bool handshake;
+		bool has_rx_bytes;
 		bool has_local_ep_addr;
 		union network_addr local_ep_addr;
 		union network_endpoint endpoint;
