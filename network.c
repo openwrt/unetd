@@ -401,6 +401,7 @@ __network_skip_endpoint_route(struct network *net, struct network_host *host,
 	subnet32 = (uint32_t *)&addr;
 	blobmsg_for_each_attr(cur, host->peer.subnet, rem) {
 		const char *str = blobmsg_get_string(cur);
+		bool match = true;
 		int i;
 
 		if (!!strchr(str, ':') != ipv6)
@@ -421,11 +422,14 @@ __network_skip_endpoint_route(struct network *net, struct network_host *host,
 				mask = 0;
 
 			mask32 = ~0ULL << (32 - cur_mask);
-			if (ntohl(subnet32[i] ^ addr32[i]) & mask32)
-				continue;
+			if (ntohl(subnet32[i] ^ addr32[i]) & mask32) {
+				match = false;
+				break;
+			}
 		}
 
-		return true;
+		if (match)
+			return true;
 	}
 
 	return false;
