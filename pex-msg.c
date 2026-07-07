@@ -679,6 +679,7 @@ close_socket:
 	close(fd);
 close_urandom:
 	fclose(pex_urandom);
+	pex_urandom = NULL;
 close_raw:
 	if (pex_raw_v4_fd >= 0)
 		close(pex_raw_v4_fd);
