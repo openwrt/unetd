@@ -119,8 +119,10 @@ const void *stun_msg_request_prepare(struct stun_request *req, size_t *len,
 	if (!f)
 		return NULL;
 
-	if (fread(hdr->transaction, 12, 1, f) != 1)
+	if (fread(hdr->transaction, 12, 1, f) != 1) {
+		fclose(f);
 		return NULL;
+	}
 
 	fclose(f);
 	memcpy(req->transaction, hdr->transaction, sizeof(req->transaction));
