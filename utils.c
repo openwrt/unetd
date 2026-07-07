@@ -286,18 +286,25 @@ static void fixup_udpv6(void *hdr, size_t hdrlen, const void *data, size_t len)
 {
 	struct ip6_hdr *ip = hdr;
 	struct udphdr *udp = hdr + sizeof(*ip);
-	uint16_t udp_len = htons(sizeof(*udp) + len);
+	uint16_t udp_len = sizeof(*udp) + len;
+	uint32_t sum;
 
 	if ((void *)&udp[1] > hdr + hdrlen)
 		return;
 
-	ip->ip6_plen = htons(sizeof(*udp) + len);
+	ip->ip6_plen = htons(udp_len);
 	udp->uh_sum = 0;
-	udp->uh_ulen = udp_len;
-	udp->uh_sum = csum_fold(csum_partial(hdr, sizeof(*ip) + sizeof(*udp)));
+	udp->uh_ulen = htons(udp_len);
+	sum = csum_partial(&ip->ip6_src, sizeof(ip->ip6_src) + sizeof(ip->ip6_dst));
+	sum = csum_add(sum, csum_tcpudp_nofold(0, 0, ip->ip6_nxt, udp_len));
+	sum = csum_add(sum, csum_partial(udp, sizeof(*udp)));
+	sum = csum_add(sum, csum_partial(data, len));
+	udp->uh_sum = csum_fold(sum);
+	if (!udp->uh_sum)
+		udp->uh_sum = 0xffff;
 
 #ifdef __APPLE__
-	ip->ip6_plen = sizeof(*udp) + len;
+	ip->ip6_plen = udp_len;
 #endif
 }
 
