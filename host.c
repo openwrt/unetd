@@ -172,6 +172,7 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 		dyn_peer = calloc_a(sizeof(*dyn_peer),
 				&ipaddr, ipaddr_len,
 				&subnet, subnet_len,
+				&meta, meta_len,
 				&endpoint_buf, endpoint ? strlen(endpoint) + 1 : 0);
 		list_add_tail(&dyn_peer->list, &net->dynamic_peers);
 		peer = &dyn_peer->peer;
