@@ -85,6 +85,8 @@ stun_msg_parse(const struct stun_tlv_policy *policy,
 	const void *end = data + data_len;
 	uint16_t cur_len;
 
+	memset(tb, 0, len * sizeof(*tb));
+
 	data += sizeof(*hdr);
 	while (1) {
 		tlv = data;
