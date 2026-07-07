@@ -625,22 +625,29 @@ static void unetd_ubus_procd_update(void)
 	firewall = blobmsg_open_array(&b, "firewall");
 
 	avl_for_each_element(&networks, net, node) {
+		struct network_peer *local;
+
 		if (!net->net_config.local_host || !net->config.interface)
 			continue;
 
-		rule = blobmsg_open_table(&b, NULL);
-		blobmsg_add_string(&b, "type", "rule");
-		blobmsg_add_string(&b, "proto", "udp");
-		blobmsg_add_string(&b, "src", "*");
-		blobmsg_add_u32(&b, "dest_port", net->net_config.port);
-		blobmsg_close_table(&b, rule);
+		local = &net->net_config.local_host->peer;
+		if (local->port) {
+			rule = blobmsg_open_table(&b, NULL);
+			blobmsg_add_string(&b, "type", "rule");
+			blobmsg_add_string(&b, "proto", "udp");
+			blobmsg_add_string(&b, "src", "*");
+			blobmsg_add_u32(&b, "dest_port", local->port);
+			blobmsg_close_table(&b, rule);
+		}
 
-		rule = blobmsg_open_table(&b, NULL);
-		blobmsg_add_string(&b, "type", "rule");
-		blobmsg_add_string(&b, "proto", "udp");
-		blobmsg_add_string(&b, "src", "*");
-		blobmsg_add_u32(&b, "dest_port", net->net_config.pex_port);
-		blobmsg_close_table(&b, rule);
+		if (local->pex_port) {
+			rule = blobmsg_open_table(&b, NULL);
+			blobmsg_add_string(&b, "type", "rule");
+			blobmsg_add_string(&b, "proto", "udp");
+			blobmsg_add_string(&b, "src", "*");
+			blobmsg_add_u32(&b, "dest_port", local->pex_port);
+			blobmsg_close_table(&b, rule);
+		}
 	}
 
 	blobmsg_close_table(&b, firewall);
