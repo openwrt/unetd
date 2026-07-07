@@ -346,6 +346,9 @@ static void udht_add_peer(const void *data, int len)
 	struct peer_entry *p;
 
 	p = calloc(1, sizeof(*p));
+	if (!p)
+		return;
+
 	memcpy(&p->sa, sa, len);
 	p->sa_len = len;
 	list_add_tail(&p->list, &bootstrap_peers);
@@ -419,6 +422,9 @@ void udht_network_add(const uint8_t *auth_key, int seq)
 	}
 
 	n = calloc(1, sizeof(*n));
+	if (!n)
+		return;
+
 	n->search_timer.cb = udht_search_timer_cb;
 	memcpy(n->auth_key, auth_key, sizeof(n->auth_key));
 	udht_id_hash(n->id, n->auth_key, sizeof(n->auth_key));
@@ -481,7 +487,7 @@ udht_status_check(struct uloop_timeout *t)
 static void
 udht_load_nodes(const char *filename)
 {
-	struct blob_attr *data, *cur;
+	struct blob_attr *data, *tmp, *cur;
 	size_t len;
 	FILE *f;
 	int rem;
@@ -491,7 +497,7 @@ udht_load_nodes(const char *filename)
 		return;
 
 	data = malloc(sizeof(struct blob_attr));
-	if (fread(data, sizeof(struct blob_attr), 1, f) != 1)
+	if (!data || fread(data, sizeof(struct blob_attr), 1, f) != 1)
 		goto out;
 
 	len = blob_pad_len(data);
@@ -501,7 +507,11 @@ udht_load_nodes(const char *filename)
 	if (len >= 256 * 1024)
 		goto out;
 
-	data = realloc(data, len);
+	tmp = realloc(data, len);
+	if (!tmp)
+		goto out;
+
+	data = tmp;
 	if (fread(data + 1, len - sizeof(struct blob_attr), 1, f) != 1)
 		goto out;
 

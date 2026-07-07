@@ -312,6 +312,9 @@ enroll_get_peer(const struct enroll_msg_hdr *hdr,
 		return NULL;
 
 	peer = calloc(1, sizeof(*peer) + blob_pad_len(meta));
+	if (!peer)
+		return NULL;
+
 	peer->node.key = peer->pubkey;
 	memcpy(peer->pubkey, hdr->pubkey, sizeof(peer->pubkey));
 	memcpy(peer->session_id, key_data->session_id, sizeof(peer->session_id));
@@ -787,6 +790,9 @@ int enroll_start(struct blob_attr *data)
 	state = calloc_a(sizeof(*state) + n_connect * sizeof(state->connect[0]),
 			 &meta_buf, blob_pad_len(meta),
 			 &enroll_meta_buf, blob_pad_len(enroll_meta));
+	if (!state)
+		return UBUS_STATUS_UNKNOWN_ERROR;
+
 	state->net = net;
 	state->connect_interval = interval * 1000;
 	avl_init(&state->peers, enroll_peer_cmp, false, NULL);

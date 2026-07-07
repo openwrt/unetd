@@ -144,6 +144,7 @@ static int network_load_dynamic(struct network *net)
 {
 	const char *json = NULL;
 	char *fname = NULL;
+	void *net_data;
 	struct stat st;
 	FILE *f = NULL;
 	int ret = -1;
@@ -162,8 +163,12 @@ static int network_load_dynamic(struct network *net)
 	if (fstat(fileno(f), &st) < 0)
 		goto out;
 
+	net_data = realloc(net->net_data, st.st_size + 1);
+	if (!net_data)
+		goto out;
+
+	net->net_data = net_data;
 	net->net_data_len = st.st_size;
-	net->net_data = realloc(net->net_data, net->net_data_len + 1);
 	memset(net->net_data + net->net_data_len, 0, 1);
 	if (fread(net->net_data, 1, net->net_data_len, f) != net->net_data_len ||
 	    unet_auth_data_validate(net->config.auth_key, net->net_data,

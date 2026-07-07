@@ -95,7 +95,7 @@ vxlan_update_fdb_hosts(struct vxlan_tunnel *vt)
 	bool active;
 	int i;
 
-	if (!vt->active)
+	if (!vt->active || !vt->cur_forward_ports)
 		return;
 
 	for (i = 0; i < s->n_members; i++) {
@@ -271,19 +271,28 @@ vxlan_init_forward_ports(struct vxlan_tunnel *vt, struct blob_attr *data)
 {
 	unsigned int len = bitmask_size(vt->s->n_members);
 	struct blob_attr *cur;
+	uint32_t *mask;
 	int rem;
 
-	vt->cur_forward_ports = realloc(vt->cur_forward_ports, len);
-	memset(vt->cur_forward_ports, 0, len);
-
-	if (!data || blobmsg_check_array(data, BLOBMSG_TYPE_STRING) <= 0) {
-		free(vt->forward_ports);
-		vt->forward_ports = NULL;
-		return;
+	mask = realloc(vt->cur_forward_ports, len);
+	if (!mask) {
+		free(vt->cur_forward_ports);
+		vt->cur_forward_ports = NULL;
+		goto no_forward;
 	}
 
-	vt->forward_ports = realloc(vt->forward_ports, len);
-	memset(vt->forward_ports, 0, len);
+	vt->cur_forward_ports = mask;
+	memset(mask, 0, len);
+
+	if (!data || blobmsg_check_array(data, BLOBMSG_TYPE_STRING) <= 0)
+		goto no_forward;
+
+	mask = realloc(vt->forward_ports, len);
+	if (!mask)
+		goto no_forward;
+
+	vt->forward_ports = mask;
+	memset(mask, 0, len);
 	blobmsg_for_each_attr(cur, data, rem) {
 		const char *name = blobmsg_get_string(cur);
 
@@ -292,6 +301,12 @@ vxlan_init_forward_ports(struct vxlan_tunnel *vt, struct blob_attr *data)
 		else
 			vxlan_mark_forward_host(vt, name);
 	}
+
+	return;
+
+no_forward:
+	free(vt->forward_ports);
+	vt->forward_ports = NULL;
 }
 
 static bool

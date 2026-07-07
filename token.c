@@ -81,6 +81,9 @@ void *token_create(struct network *net, struct network_host *target,
 		return NULL;
 
 	hdr = data = malloc(sizeof(*hdr) + data_len);
+	if (!hdr)
+		return NULL;
+
 	data += sizeof(*hdr);
 
 	memcpy(hdr->src, local_host->peer.key, sizeof(hdr->src));

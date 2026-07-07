@@ -30,6 +30,9 @@ int network_get_endpoint(union network_endpoint *dest, int af, const char *str,
 	int n_res;
 	int ret = -1;
 
+	if (!buf)
+		return -1;
+
 	memset(dest, 0, sizeof(*dest));
 
 	if (*host == '[') {
@@ -92,6 +95,9 @@ int network_get_subnet(int af, union network_addr *addr, int *mask, const char *
 	char *buf = strdup(str);
 	char *sep, *end;
 	int ret = -1;
+
+	if (!buf)
+		return -1;
 
 	if (af == AF_INET6)
 		*mask = 128;

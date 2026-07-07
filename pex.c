@@ -780,6 +780,9 @@ network_pex_create_host(struct network *net, union network_endpoint *ep,
 	}
 
 	host = calloc(1, sizeof(*host));
+	if (!host)
+		return NULL;
+
 	new_host = true;
 	memcpy(&host->endpoint, ep, sizeof(host->endpoint));
 	list_add_tail(&host->list, &pex->hosts);
@@ -865,7 +868,8 @@ __network_pex_reload_iface(struct network *net, struct blob_attr *data)
 
 		*(uint32_t *)&ep.in.sin_addr |= htonl((~0U) >> mask);
 		host = network_pex_create_host(net, &ep, 0);
-		host->interface = true;
+		if (host)
+			host->interface = true;
 	}
 }
 

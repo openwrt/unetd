@@ -142,6 +142,7 @@ static void
 network_host_add_group(struct network *net, struct network_host *host,
 		       const char *name)
 {
+	struct network_host **members;
 	struct network_group *group;
 	int i;
 
@@ -150,9 +151,12 @@ network_host_add_group(struct network *net, struct network_host *host,
 		if (group->members[i] == host)
 			return;
 
-	group->n_members++;
-	group->members = realloc(group->members, group->n_members * sizeof(*group->members));
-	group->members[group->n_members - 1] = host;
+	members = realloc(group->members, (group->n_members + 1) * sizeof(*members));
+	if (!members)
+		return;
+
+	group->members = members;
+	group->members[group->n_members++] = host;
 }
 
 enum {

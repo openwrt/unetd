@@ -390,6 +390,11 @@ void pex_msg_update_response_init(struct pex_msg_update_send_ctx *ctx,
 	curve25519(enc_key, e_key_priv, peer_key);
 
 	ctx->data = ctx->cur = malloc(len);
+	if (!ctx->data) {
+		ctx->rem = 0;
+		return;
+	}
+
 	ctx->rem = len;
 
 	memcpy(ctx->data, data, len);
@@ -436,6 +441,9 @@ pex_msg_update_request_init(const uint8_t *pubkey, const uint8_t *priv_key,
 	}
 
 	ctx = calloc(1, sizeof(*ctx));
+	if (!ctx)
+		return NULL;
+
 	memcpy(&ctx->addr, addr, sizeof(ctx->addr));
 	memcpy(ctx->auth_key, auth_key, sizeof(ctx->auth_key));
 	memcpy(ctx->priv_key, priv_key, sizeof(ctx->priv_key));

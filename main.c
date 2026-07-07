@@ -190,6 +190,9 @@ int main(int argc, char **argv)
 			break;
 		case 'N':
 			net = calloc(1, sizeof(*net));
+			if (!net)
+				return 1;
+
 			net->next = cmd_nets;
 			net->data = optarg;
 			cmd_nets = net;
