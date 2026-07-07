@@ -303,7 +303,7 @@ wg_linux_get_cb(struct nl_msg *msg, void *arg)
 	struct nlattr *tb[__WGDEVICE_A_LAST];
 	time_t now = time(NULL);
 
-	nlmsg_parse(nh, sizeof(struct genlmsghdr), tb, __WGDEVICE_A_LAST, NULL);
+	nlmsg_parse(nh, sizeof(struct genlmsghdr), tb, WGDEVICE_A_MAX, NULL);
 	wg_linux_parse_peer_list(net, tb[WGDEVICE_A_PEERS], now);
 
 	return NL_SKIP;
