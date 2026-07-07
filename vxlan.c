@@ -381,6 +381,7 @@ vxlan_free(struct network *net, struct network_service *s)
 	vxlan_tunnel_teardown(vt);
 	s->vxlan = NULL;
 	free(vt->forward_ports);
+	free(vt->cur_forward_ports);
 	free(vt);
 }
 
