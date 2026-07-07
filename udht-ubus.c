@@ -68,8 +68,9 @@ udht_ubus_update_networks(struct ubus_context *ctx)
 
 	seq++;
 
-	if (ubus_lookup_id(ctx, "unetd", &id) == 0)
-		ubus_invoke(ctx, id, "network_get", b.head, udht_ubus_network_cb, &seq, 5000);
+	if (ubus_lookup_id(ctx, "unetd", &id) ||
+	    ubus_invoke(ctx, id, "network_get", b.head, udht_ubus_network_cb, &seq, 5000))
+		return;
 
 	udht_network_flush(seq);
 }
