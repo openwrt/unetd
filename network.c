@@ -216,7 +216,8 @@ int network_save_dynamic(struct network *net)
 	}
 
 	len = fwrite(net->net_data, 1, net->net_data_len, f);
-	fflush(f);
+	if (fflush(f) || ferror(f))
+		len = 0;
 	fdatasync(fd);
 	fclose(f);
 
