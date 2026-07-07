@@ -296,8 +296,10 @@ udht_open_socket(const char *unix_path)
 	if (fd < 0)
 		return -1;
 
-	if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sfd) < 0)
+	if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sfd) < 0) {
 		close(fd);
+		return -1;
+	}
 
 	dht_unix_fd = fd;
 	dht_fd.fd = sfd[1];
