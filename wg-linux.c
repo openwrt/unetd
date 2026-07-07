@@ -37,6 +37,8 @@ struct wg_linux_peer_req {
 	struct nl_msg *msg;
 
 	struct nlattr *peers, *entry, *ips;
+
+	int error;
 };
 
 static struct unl unl;
@@ -160,12 +162,16 @@ static struct nl_msg *
 wg_linux_peer_msg_size_check(struct wg_linux_peer_req *req, struct network *net,
 			     struct network_peer *peer)
 {
+	int ret;
+
 	if (nlmsg_get_max_size(req->msg) >
 	    nlmsg_total_size(nlmsg_hdr(req->msg)->nlmsg_len) + 256)
 		return req->msg;
 
 	nla_nest_end(req->msg, req->ips);
-	wg_linux_peer_req_done(req);
+	ret = wg_linux_peer_req_done(req);
+	if (ret && !req->error)
+		req->error = ret;
 
 	wg_linux_peer_req_init(net, peer, req);
 	req->ips = nla_nest_start(req->msg, WGPEER_A_ALLOWEDIPS);
@@ -224,8 +230,10 @@ wg_linux_peer_update(struct network *net, struct network_peer *peer, enum wg_upd
 {
 	struct wg_linux_peer_req req;
 	struct network_host *host;
+	int ret;
 
 	wg_linux_peer_req_init(net, peer, &req);
+	req.error = 0;
 
 	if (cmd == WG_PEER_DELETE) {
 		nla_put_u32(req.msg, WGPEER_A_FLAGS, WGPEER_F_REMOVE_ME);
@@ -244,7 +252,11 @@ wg_linux_peer_update(struct network *net, struct network_peer *peer, enum wg_upd
 	nla_nest_end(req.msg, req.ips);
 
 out:
-	return wg_linux_peer_req_done(&req);
+	ret = wg_linux_peer_req_done(&req);
+	if (req.error)
+		return req.error;
+
+	return ret;
 }
 
 static void
@@ -323,13 +335,14 @@ wg_linux_peer_connect(struct network *net, struct network_peer *peer,
 {
 	struct wg_linux_peer_req req;
 	struct nl_msg *msg;
+	int err = 0, ret;
 	int len;
 
 	msg = wg_linux_peer_req_init(net, peer, &req);
 
 	if (net->net_config.keepalive) {
 		nla_put_u16(msg, WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL, 0);
-		wg_linux_peer_req_done(&req);
+		err = wg_linux_peer_req_done(&req);
 
 		msg = wg_linux_peer_req_init(net, peer, &req);
 		nla_put_u16(msg, WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL,
@@ -342,7 +355,11 @@ wg_linux_peer_connect(struct network *net, struct network_peer *peer,
 		len = sizeof(ep->in);
 	nla_put(msg, WGPEER_A_ENDPOINT, len, &ep->in6);
 
-	return wg_linux_peer_req_done(&req);
+	ret = wg_linux_peer_req_done(&req);
+	if (err)
+		return err;
+
+	return ret;
 }
 
 const struct wg_ops wg_linux_ops = {
