@@ -346,13 +346,26 @@ static int cmd_sign(int argc, char **argv)
 		return 1;
 	}
 
+	if ((uint64_t)st.st_size > SIZE_MAX - sizeof(*data) - 1) {
+		INFO("Input file too large\n");
+		fclose(f);
+		return 1;
+	}
+
 	data = calloc(1, sizeof(*data) + st.st_size + 1);
+	if (!data) {
+		INFO("Out of memory\n");
+		fclose(f);
+		return 1;
+	}
+
 	data->timestamp = cpu_to_be64(tv.tv_sec);
 	len = fread(data + 1, 1, st.st_size, f);
 	fclose(f);
 
 	if (len != st.st_size) {
 		INFO("Error reading from input file\n");
+		free(data);
 		return 1;
 	}
 
@@ -395,12 +408,25 @@ static int cmd_verify(int argc, char **argv)
 		return 1;
 	}
 
+	if ((uint64_t)st.st_size > SIZE_MAX) {
+		INFO("Input file too large\n");
+		fclose(f);
+		return 1;
+	}
+
 	hdr = calloc(1, st.st_size);
+	if (!hdr) {
+		INFO("Out of memory\n");
+		fclose(f);
+		return 1;
+	}
+
 	len = fread(hdr, 1, st.st_size, f);
 	fclose(f);
 
 	if (len != st.st_size) {
 		INFO("Error reading from input file\n");
+		free(hdr);
 		return 1;
 	}
 
