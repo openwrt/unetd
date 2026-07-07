@@ -298,6 +298,9 @@ pex_unix_cb(struct uloop_fd *fd, unsigned int events)
 		else
 			continue;
 
+		if (len <= slen)
+			continue;
+
 		sa = get_mapped_sockaddr(sa);
 		sendto(pex_fd.fd, buf + slen, len - slen, 0, sa, sizeof(struct sockaddr_in6));
 	}
