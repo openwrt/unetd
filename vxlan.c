@@ -135,9 +135,10 @@ vxlan_tunnel_init(struct vxlan_tunnel *vt)
 	memset(&group_addr, 0xff, sizeof(group_addr));
 	msg = vxlan_rtnl_msg(vt->ifname, RTM_NEWLINK, NLM_F_CREATE | NLM_F_EXCL);
 
+	nla_put_u32(msg, IFLA_MTU, vt->mtu);
+
 	linkinfo = nla_nest_start(msg, IFLA_LINKINFO);
 	nla_put_string(msg, IFLA_INFO_KIND, "vxlan");
-	nla_put_u32(msg, IFLA_MTU, vt->mtu);
 
 	data = nla_nest_start(msg, IFLA_INFO_DATA);
 	nla_put_u32(msg, IFLA_VXLAN_ID, vxlan_tunnel_id(vt));
