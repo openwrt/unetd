@@ -105,7 +105,8 @@ network_host_uses_peer_route(struct network_host *host, struct network *net,
 	if (host == peer_host || host == net->net_config.local_host)
 		return false;
 
-	if (net->net_config.local_host->gateway &&
+	if (net->net_config.local_host &&
+	    net->net_config.local_host->gateway &&
 	    !strcmp(net->net_config.local_host->gateway, network_peer_name(peer)))
 		return true;
 
