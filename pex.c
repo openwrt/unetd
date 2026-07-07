@@ -554,12 +554,14 @@ network_pex_recv_update_request(struct network *net, struct network_peer *peer,
 	struct pex_update_request *req = (struct pex_update_request *)data;
 	struct pex_endpoint_port_notify *port_data;
 	struct pex_msg_update_send_ctx ctx = {};
-	uint64_t req_version = be64_to_cpu(req->cur_version);
+	uint64_t req_version;
 	int *query_count;
 	bool done = false;
 
 	if (len < sizeof(struct pex_update_request))
 		return;
+
+	req_version = be64_to_cpu(req->cur_version);
 
 	if (net->config.type != NETWORK_TYPE_DYNAMIC)
 		return;
