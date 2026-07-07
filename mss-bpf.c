@@ -50,8 +50,9 @@ fixup_tcp(struct skb_parser_info *info, __u16 mss)
 
 	end = info->offset;
 
+	/* enough iterations to scan the full 40 byte option space */
 #pragma unroll
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < 40; i++) {
 		if (offset + 4 > end)
 			return;
 
