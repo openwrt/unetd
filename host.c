@@ -463,4 +463,5 @@ void network_hosts_free(struct network *net)
 	uloop_timeout_cancel(&net->connect_timer);
 	network_hosts_update_start(net);
 	__network_hosts_update_done(net, true);
+	net->net_config.local_host = NULL;
 }
