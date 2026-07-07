@@ -207,7 +207,7 @@ int network_save_dynamic(struct network *net)
 	f = fdopen(fd, "w");
 	if (!f) {
 		close(fd);
-		goto error;
+		goto error_unlink;
 	}
 
 	len = fwrite(net->net_data, 1, net->net_data_len, f);
@@ -216,9 +216,12 @@ int network_save_dynamic(struct network *net)
 	fclose(f);
 
 	if (len != net->net_data_len)
-		goto error;
+		goto error_unlink;
 
 	fname2 = strdup(fname);
+	if (!fname2)
+		goto error_unlink;
+
 	*strrchr(fname2, '.') = 0;
 	ret = rename(fname, fname2);
 	free(fname2);
@@ -229,6 +232,8 @@ int network_save_dynamic(struct network *net)
 
 	return ret;
 
+error_unlink:
+	unlink(fname);
 error:
 	free(fname);
 	return -1;
