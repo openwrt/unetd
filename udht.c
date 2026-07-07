@@ -231,7 +231,7 @@ udht_timer_cb(struct uloop_timeout *t)
 static void
 udht_fd_cb(struct uloop_fd *fd, unsigned int events)
 {
-	static char buf[4096];
+	static char buf[sizeof(struct sockaddr_in6) + PEX_RX_BUF_SIZE + 1];
 	struct sockaddr *sa = (struct sockaddr *)buf;
 	time_t tosleep = 1;
 	int len;
