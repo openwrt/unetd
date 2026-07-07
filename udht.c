@@ -274,6 +274,14 @@ udht_fd_cb(struct uloop_fd *fd, unsigned int events)
 	}
 }
 
+static void
+udht_close_socket(void)
+{
+	uloop_fd_delete(&dht_fd);
+	close(dht_fd.fd);
+	close(dht_unix_fd);
+}
+
 static int
 udht_open_socket(const char *unix_path)
 {
@@ -315,18 +323,16 @@ udht_open_socket(const char *unix_path)
 	cmsg->cmsg_len = CMSG_LEN(sizeof(int));
 	*(int *)CMSG_DATA(cmsg) = sfd[0];
 
-	sendmsg(dht_unix_fd, &msg, 0);
+	if (sendmsg(dht_unix_fd, &msg, 0) < 0) {
+		perror("sendmsg");
+		close(sfd[0]);
+		udht_close_socket();
+		return -1;
+	}
+
 	close(sfd[0]);
 
 	return 0;
-}
-
-static void
-udht_close_socket(void)
-{
-	uloop_fd_delete(&dht_fd);
-	close(dht_fd.fd);
-	close(dht_unix_fd);
 }
 
 static void udht_id_hash(uint8_t *dest, const void *data, int len)

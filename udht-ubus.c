@@ -100,7 +100,11 @@ udht_ubus_setup_cb(struct uloop_timeout *t)
 		return;
 	}
 
-	udht_reconnect();
+	if (udht_reconnect() < 0) {
+		uloop_timeout_set(t, 1000);
+		return;
+	}
+
 	udht_ubus_update_networks(ctx);
 }
 
