@@ -123,7 +123,7 @@ token_decrypt(struct network *net, struct token_hdr *hdr, size_t len,
 	data = hdr + 1;
 	memcpy(pubkey, hdr->src, sizeof(hdr->src));
 	peer = avl_find_ge_element(&net->peers.avl, pubkey, peer, node.avl);
-	if (!peer || peer == &local_host->peer)
+	if (!peer || peer->dynamic || peer == &local_host->peer)
 		return false;
 
 	if (memcmp(peer->key, pubkey, sizeof(hdr->src)) != 0)
