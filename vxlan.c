@@ -197,8 +197,8 @@ vxlan_find_ifname(struct network *net, const char *service)
 			continue;
 
 		name = blobmsg_name(cur);
-		if (strlen(name) > IFNAMSIZ)
-			break;
+		if (strlen(name) >= IFNAMSIZ)
+			continue;
 
 		return name;
 	}
