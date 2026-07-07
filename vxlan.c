@@ -77,6 +77,9 @@ vxlan_update_host_fdb_entry(struct vxlan_tunnel *vt, struct network_host *host, 
 		flags |= NLM_F_CREATE | NLM_F_APPEND;
 
 	msg = nlmsg_alloc_simple(add ? RTM_NEWNEIGH : RTM_DELNEIGH, flags);
+	if (!msg)
+		return -1;
+
 	nlmsg_append(msg, &ndmsg, sizeof(ndmsg), 0);
 	nla_put(msg, NDA_LLADDR, ETH_ALEN, lladdr);
 	nla_put(msg, NDA_DST, sizeof(struct in6_addr), &host->peer.local_addr);
@@ -134,6 +137,8 @@ vxlan_tunnel_init(struct vxlan_tunnel *vt)
 
 	memset(&group_addr, 0xff, sizeof(group_addr));
 	msg = vxlan_rtnl_msg(vt->ifname, RTM_NEWLINK, NLM_F_CREATE | NLM_F_EXCL);
+	if (!msg)
+		return;
 
 	nla_put_u32(msg, IFLA_MTU, vt->mtu);
 

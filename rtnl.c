@@ -50,6 +50,14 @@ int rtnl_call(struct nl_msg *msg)
 {
 	int ret;
 
+	if (!msg)
+		return -1;
+
+	if (!rtnl) {
+		nlmsg_free(msg);
+		return -1;
+	}
+
 	ret = nl_send_auto_complete(rtnl, msg);
 	nlmsg_free(msg);
 
