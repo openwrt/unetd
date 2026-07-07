@@ -165,6 +165,8 @@ udht_send_v4_node(const void *id, const void *data)
 		goto found;
 	}
 
+	return;
+
 found:
 	send(dht_unix_fd, &msg, sizeof(msg), 0);
 }
