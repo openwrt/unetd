@@ -879,20 +879,27 @@ __network_pex_reload(struct network *net)
 	struct network_pex *pex = &net->pex;
 	struct network_pex_host *host, *tmp;
 	struct blob_attr *cur;
+	bool flushed = false;
 	size_t rem;
 
 	if (!net->config.local_network)
 		return;
-
-	list_for_each_entry_safe(host, tmp, &pex->hosts, list)
-		if (host->interface)
-			network_pex_free_host(net, host);
 
 	blobmsg_for_each_attr(cur, net->config.local_network, rem) {
 		const char *name = blobmsg_get_string(cur);
 		struct blob_attr *addrs;
 
 		addrs = unetd_ubus_get_network_addr_list(name);
+		if (!addrs)
+			continue;
+
+		if (!flushed) {
+			list_for_each_entry_safe(host, tmp, &pex->hosts, list)
+				if (host->interface)
+					network_pex_free_host(net, host);
+			flushed = true;
+		}
+
 		__network_pex_reload_iface(net, addrs);
 	}
 }

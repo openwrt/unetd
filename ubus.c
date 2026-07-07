@@ -702,19 +702,21 @@ struct blob_attr *unetd_ubus_get_network_addr_list(const char *name)
 	uint32_t id;
 	size_t len;
 
+	blob_buf_init(&status_buf, 0);
+
 	if (strlen(name) > 64)
-		return NULL;
+		return status_buf.head;
 
 	len = sizeof("network.interface.") + strlen(name) + 1;
 	objname = alloca(len);
 	snprintf(objname, len, "network.interface.%s", name);
 
 	if (ubus_lookup_id(&conn.ctx, objname, &id))
-		return NULL;
+		return status_buf.head;
 
-	blob_buf_init(&status_buf, 0);
-	ubus_invoke(&conn.ctx, id, "status", status_buf.head, ubus_network_status_cb,
-		    &status_buf, 10000);
+	if (ubus_invoke(&conn.ctx, id, "status", status_buf.head, ubus_network_status_cb,
+			&status_buf, 10000))
+		return NULL;
 
 	return status_buf.head;
 }
