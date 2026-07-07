@@ -25,6 +25,7 @@ struct network_peer {
 	int pex_port;
 	bool dynamic;
 	bool indirect;
+	bool gateway_dirty;
 
 	struct {
 		int connect_attempt;

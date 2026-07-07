@@ -20,7 +20,56 @@ network_peer_equal(struct network_peer *p1, struct network_peer *p2)
 	return !memcmp(&p1->local_addr, &p2->local_addr, sizeof(p1->local_addr)) &&
 	       blob_attr_equal(p1->ipaddr, p2->ipaddr) &&
 	       blob_attr_equal(p1->subnet, p2->subnet) &&
-	       p1->port == p2->port;
+	       p1->port == p2->port &&
+	       p1->indirect == p2->indirect;
+}
+
+static const char *
+network_peer_gateway(struct network_peer *peer)
+{
+	struct network_host *host;
+
+	if (peer->dynamic)
+		return NULL;
+
+	host = container_of(peer, struct network_host, peer);
+	return host->gateway;
+}
+
+static bool
+network_peer_gateway_equal(struct network_peer *p1, struct network_peer *p2)
+{
+	const char *gw1 = network_peer_gateway(p1);
+	const char *gw2 = network_peer_gateway(p2);
+
+	if (!gw1 || !gw2)
+		return gw1 == gw2;
+
+	return !strcmp(gw1, gw2);
+}
+
+static void
+network_peer_mark_gateway_dirty(struct network *net, struct network_peer *peer)
+{
+	struct network_host *local = net->net_config.local_host;
+	struct network_host *host;
+	const char *name;
+
+	if (peer->dynamic)
+		return;
+
+	host = container_of(peer, struct network_host, peer);
+	name = host->gateway;
+	if (!name && local && local->gateway)
+		name = local->gateway;
+	if (!name)
+		return;
+
+	host = avl_find_element(&net->hosts, name, host, node);
+	if (!host || host == local || host->peer.indirect)
+		return;
+
+	host->peer.gateway_dirty = true;
 }
 
 static void
@@ -31,22 +80,40 @@ network_peer_update(struct vlist_tree *tree,
 	struct network *net = container_of(tree, struct network, peers);
 	struct network_peer *h_new = container_of_safe(node_new, struct network_peer, node);
 	struct network_peer *h_old = container_of_safe(node_old, struct network_peer, node);
+	bool old_direct = h_old && !h_old->indirect;
 	int ret;
 
 	if (h_new && h_old) {
 		memcpy(&h_new->state, &h_old->state, sizeof(h_new->state));
 
-		if (network_peer_equal(h_new, h_old))
+		if (network_peer_equal(h_new, h_old)) {
+			if (!network_peer_gateway_equal(h_new, h_old)) {
+				network_peer_mark_gateway_dirty(net, h_old);
+				network_peer_mark_gateway_dirty(net, h_new);
+			}
 			return;
+		}
 	}
 
-	if ((h_new ? h_new : h_old)->indirect)
+	if (h_new && h_new->indirect) {
+		if (old_direct)
+			wg_peer_update(net, h_old, WG_PEER_DELETE);
+		network_peer_mark_gateway_dirty(net, h_new);
 		return;
+	}
+
+	if (!h_new && !old_direct) {
+		network_peer_mark_gateway_dirty(net, h_old);
+		return;
+	}
 
 	if (h_new)
-		ret = wg_peer_update(net, h_new, h_old ? WG_PEER_UPDATE : WG_PEER_CREATE);
+		ret = wg_peer_update(net, h_new, old_direct ? WG_PEER_UPDATE : WG_PEER_CREATE);
 	else
 		ret = wg_peer_update(net, h_old, WG_PEER_DELETE);
+
+	if (h_new && h_old && h_old->indirect)
+		network_peer_mark_gateway_dirty(net, h_old);
 
 	if (ret)
 		fprintf(stderr, "Failed to %s peer on network %s: %s\n",
@@ -327,6 +394,28 @@ void network_hosts_update_start(struct network *net)
 }
 
 static void
+network_hosts_refresh_gateways(struct network *net)
+{
+	struct network_host *local = net->net_config.local_host;
+	struct network_host *host;
+	bool dirty;
+	int ret;
+
+	avl_for_each_element(&net->hosts, host, node) {
+		dirty = host->peer.gateway_dirty;
+		host->peer.gateway_dirty = false;
+
+		if (!dirty || !local || host == local || host->peer.indirect)
+			continue;
+
+		ret = wg_peer_update(net, &host->peer, WG_PEER_UPDATE);
+		if (ret)
+			fprintf(stderr, "Failed to update gateway peer on network %s: %s\n",
+				network_name(net), strerror(-ret));
+	}
+}
+
+static void
 __network_hosts_update_done(struct network *net, bool free_net)
 {
 	struct network_host *local, *host, *tmp;
@@ -361,6 +450,9 @@ __network_hosts_update_done(struct network *net, bool free_net)
 
 out:
 	vlist_flush(&net->peers);
+
+	if (!free_net)
+		network_hosts_refresh_gateways(net);
 
 	network_host_free_dynamic_peers(&old_dynamic);
 
