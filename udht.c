@@ -436,7 +436,7 @@ void udht_network_flush(int seq)
 	struct network_entry *n, *tmp;
 
 	list_for_each_entry_safe(n, tmp, &networks, list) {
-		if (seq >= 0 && (n->seq < 0 || n->seq == seq))
+		if (n->seq < 0 || (seq >= 0 && n->seq == seq))
 			continue;
 
 		list_del(&n->list);
@@ -580,6 +580,7 @@ static int usage(const char *progname)
 static void udht_disconnect(struct uloop_timeout *t)
 {
 	struct peer_entry *p, *tmp;
+	struct network_entry *n;
 
 	if (!udht_connected)
 		return;
@@ -592,6 +593,10 @@ static void udht_disconnect(struct uloop_timeout *t)
 	uloop_timeout_cancel(&disconnect_timer);
 	udht_connected = false;
 	udht_network_flush(-1);
+	list_for_each_entry(n, &networks, list) {
+		uloop_timeout_cancel(&n->search_timer);
+		n->search_count = 0;
+	}
 
 	uloop_timeout_cancel(&peer_timer);
 	uloop_timeout_cancel(&status_timer);
