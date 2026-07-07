@@ -809,8 +809,10 @@ int enroll_start(struct blob_attr *data)
 	}
 
 	f = fopen("/dev/urandom", "r");
-	if (!f)
-		return UBUS_STATUS_UNKNOWN_ERROR;
+	if (!f) {
+		err = UBUS_STATUS_UNKNOWN_ERROR;
+		goto error;
+	}
 
 	if (fread(state->privkey, sizeof(state->privkey), 1, f) != 1)
 	    err = UBUS_STATUS_UNKNOWN_ERROR;
