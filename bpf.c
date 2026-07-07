@@ -97,8 +97,12 @@ int unetd_attach_mssfix(int ifindex, int mtu)
 	}
 
 	prog_fd = bpf_program__fd(prog);
-	unetd_attach_bpf_prog(ifindex, prog_fd, true);
-	unetd_attach_bpf_prog(ifindex, prog_fd, false);
+	if (unetd_attach_bpf_prog(ifindex, prog_fd, true) ||
+	    unetd_attach_bpf_prog(ifindex, prog_fd, false)) {
+		fprintf(stderr, "Failed to attach mssfix program to ifindex %d\n",
+			ifindex);
+		goto out;
+	}
 
 	ret = 0;
 
