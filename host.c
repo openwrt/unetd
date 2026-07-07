@@ -132,6 +132,9 @@ network_group_get(struct network *net, const char *name)
 		return group;
 
 	group = calloc_a(sizeof(*group), &name_buf, strlen(name) + 1);
+	if (!group)
+		return NULL;
+
 	group->node.key = strcpy(name_buf, name);
 	avl_insert(&net->groups, &group->node);
 
@@ -147,6 +150,9 @@ network_host_add_group(struct network *net, struct network_host *host,
 	int i;
 
 	group = network_group_get(net, name);
+	if (!group)
+		return;
+
 	for (i = 0; i < group->n_members; i++)
 		if (group->members[i] == host)
 			return;
@@ -245,6 +251,9 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 				&subnet, subnet_len,
 				&meta, meta_len,
 				&endpoint_buf, endpoint ? strlen(endpoint) + 1 : 0);
+		if (!dyn_peer)
+			return;
+
 		list_add_tail(&dyn_peer->list, &net->dynamic_peers);
 		peer = &dyn_peer->peer;
 	} else {
@@ -263,6 +272,9 @@ network_host_create(struct network *net, struct blob_attr *attr, bool dynamic)
 				&meta, meta_len,
 				&endpoint_buf, endpoint ? strlen(endpoint) + 1 : 0,
 				&gateway_buf, gateway ? strlen(gateway) + 1 : 0);
+		if (!host)
+			return;
+
 		host->node.key = strcpy(name_buf, name);
 		peer = &host->peer;
 	}

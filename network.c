@@ -728,6 +728,9 @@ network_alloc(const char *name)
 	char *name_buf;
 
 	net = calloc_a(sizeof(*net), &name_buf, strlen(name) + 1);
+	if (!net)
+		return NULL;
+
 	net->node.key = strcpy(name_buf, name);
 	net->reload_timer.cb = network_reload;
 	avl_insert(&networks, &net->node);
@@ -762,6 +765,8 @@ int unetd_network_add(const char *name, struct blob_attr *config)
 	net = avl_find_element(&networks, name, net, node);
 	if (!net)
 		net = network_alloc(name);
+	if (!net)
+		return -1;
 
 	return network_set_config(net, config);
 }

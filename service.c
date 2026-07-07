@@ -131,6 +131,8 @@ service_add(struct network *net, struct blob_attr *data)
 		     &name_buf, strlen(name) + 1,
 		     &type_buf, type ? strlen(type) + 1 : 0,
 		     &config_buf, config ? blob_pad_len(config) : 0);
+	if (!s)
+		return;
 
 	strcpy(name_buf, name);
 	if (type)

@@ -36,6 +36,9 @@ void network_stun_server_add(struct network *net, const char *host)
 	char *name_buf;
 
 	s = calloc_a(sizeof(*s), &name_buf, strlen(host) + 1);
+	if (!s)
+		return;
+
 	s->pending_node.key = s->req.transaction;
 	s->host = strcpy(name_buf, host);
 
