@@ -491,9 +491,10 @@ static void network_reload(struct uloop_timeout *t)
 
 	net->prev_local_host = net->net_config.local_host;
 
+	network_stun_free(net);
+
 	memset(&net->net_config, 0, sizeof(net->net_config));
 
-	network_stun_free(net);
 	network_pex_close(net);
 	network_services_free(net);
 	network_hosts_update_start(net);
