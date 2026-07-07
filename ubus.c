@@ -679,6 +679,7 @@ ubus_network_status_cb(struct ubus_request *req, int type, struct blob_attr *msg
 {
 	static const struct blobmsg_policy policy =
 		{ "ipv4-address", BLOBMSG_TYPE_ARRAY };
+	struct blob_buf *buf = req->priv;
 	struct blob_attr *attr, *cur;
 	size_t rem;
 
@@ -690,11 +691,12 @@ ubus_network_status_cb(struct ubus_request *req, int type, struct blob_attr *msg
 		return;
 
 	blobmsg_for_each_attr(cur, attr, rem)
-		blobmsg_add_blob(&b, cur);
+		blobmsg_add_blob(buf, cur);
 }
 
 struct blob_attr *unetd_ubus_get_network_addr_list(const char *name)
 {
+	static struct blob_buf status_buf;
 	char *objname;
 	uint32_t id;
 	size_t len;
@@ -709,10 +711,11 @@ struct blob_attr *unetd_ubus_get_network_addr_list(const char *name)
 	if (ubus_lookup_id(&conn.ctx, objname, &id))
 		return NULL;
 
-	blob_buf_init(&b, 0);
-	ubus_invoke(&conn.ctx, id, "status", b.head, ubus_network_status_cb, NULL, 10000);
+	blob_buf_init(&status_buf, 0);
+	ubus_invoke(&conn.ctx, id, "status", status_buf.head, ubus_network_status_cb,
+		    &status_buf, 10000);
 
-	return b.head;
+	return status_buf.head;
 }
 
 void unetd_ubus_netifd_add_route(struct network *net, union network_endpoint *ep)
