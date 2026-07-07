@@ -117,8 +117,10 @@ pex_recv_update_response(const uint8_t *data, size_t len, enum pex_opcode op)
 		return;
 
 	if (cmd == CMD_DOWNLOAD) {
-		fwrite(net_data, net_data_len, 1, out_file);
-		sync_done = true;
+		if (fwrite(net_data, net_data_len, 1, out_file) == 1)
+			sync_done = true;
+		else
+			INFO("Error writing output file\n");
 	}
 
 	free(net_data);
@@ -374,8 +376,12 @@ static int cmd_sign(int argc, char **argv)
 	memcpy(data->pubkey, pubkey, sizeof(pubkey));
 	edsign_sign(hdr.signature, pubkey, seckey, (const void *)data, len);
 
-	fwrite(&hdr, sizeof(hdr), 1, out_file);
-	fwrite(data, len, 1, out_file);
+	if (fwrite(&hdr, sizeof(hdr), 1, out_file) != 1 ||
+	    fwrite(data, len, 1, out_file) != 1) {
+		INFO("Error writing output file\n");
+		free(data);
+		return 1;
+	}
 
 	free(data);
 
@@ -844,7 +850,8 @@ int main(int argc, char **argv)
 	blob_buf_free(&b);
 
 	if (out_file != stdout) {
-		fclose(out_file);
+		if (fclose(out_file) && !ret)
+			ret = 1;
 		if (ret)
 			unlink(out_filename);
 	}
