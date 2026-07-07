@@ -15,7 +15,14 @@
 #include "chacha20.h"
 #include "auth-data.h"
 
-static char pex_tx_buf[PEX_BUF_SIZE];
+/*
+ * The 4-byte offset makes the payload structures following the 12-byte
+ * struct pex_hdr and the extended header land on their natural 8-byte
+ * alignment, which strict-alignment targets require for the 64-bit
+ * message fields.
+ */
+static char pex_tx_buf_storage[PEX_BUF_SIZE + 4] __attribute__((aligned(8)));
+static char * const pex_tx_buf = pex_tx_buf_storage + 4;
 static FILE *pex_urandom;
 static struct uloop_fd pex_fd, pex_unix_fd;
 static LIST_HEAD(requests);
@@ -136,7 +143,7 @@ void *pex_msg_append(size_t len)
 	int ofs = hdr->len + sizeof(struct pex_hdr);
 	void *buf = &pex_tx_buf[ofs];
 
-	if (sizeof(pex_tx_buf) - ofs < len)
+	if (PEX_BUF_SIZE - ofs < len)
 		return NULL;
 
 	hdr->len += len;
@@ -149,13 +156,14 @@ static void
 pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 {
 	static struct sockaddr_in6 sin6;
-	static char buf[PEX_RX_BUF_SIZE];
+	static char buf_storage[PEX_RX_BUF_SIZE + 4] __attribute__((aligned(8)));
+	char *buf = buf_storage + 4;
 	ssize_t len;
 
 	while (1) {
 		static struct iovec iov[2] = {
 			{ .iov_base = &sin6 },
-			{ .iov_base = buf },
+			{ .iov_base = buf_storage + 4 },
 		};
 		static struct msghdr msg = {
 			.msg_iov = iov,
@@ -163,7 +171,7 @@ pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 		};
 		socklen_t slen = sizeof(sin6);
 
-		len = recvfrom(fd->fd, buf, sizeof(buf), 0, (struct sockaddr *)&sin6, &slen);
+		len = recvfrom(fd->fd, buf, PEX_RX_BUF_SIZE, 0, (struct sockaddr *)&sin6, &slen);
 		if (len < 0) {
 			if (errno == EINTR)
 				continue;

@@ -717,14 +717,15 @@ network_pex_fd_cb(struct uloop_fd *fd, unsigned int events)
 	struct network_peer *local = &net->net_config.local_host->peer;
 	struct network_peer *peer;
 	struct sockaddr_in6 sin6;
-	static char buf[PEX_BUF_SIZE];
-	struct pex_hdr *hdr = (struct pex_hdr *)buf;
+	static char buf_storage[PEX_BUF_SIZE + 4] __attribute__((aligned(8)));
+	char *buf = buf_storage + 4;
+	struct pex_hdr *hdr;
 	ssize_t len;
 
 	while (1) {
 		socklen_t slen = sizeof(sin6);
 
-		len = recvfrom(fd->fd, buf, sizeof(buf), 0, (struct sockaddr *)&sin6, &slen);
+		len = recvfrom(fd->fd, buf, PEX_BUF_SIZE, 0, (struct sockaddr *)&sin6, &slen);
 		if (len < 0) {
 			if (errno == EINTR)
 				continue;
