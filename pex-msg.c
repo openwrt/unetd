@@ -459,6 +459,7 @@ pex_msg_update_request_init(const uint8_t *pubkey, const uint8_t *priv_key,
 		uloop_timeout_set(&gc_timer, 1000);
 
 	if (!__pex_msg_init_ext(pubkey, auth_key, PEX_MSG_UPDATE_REQUEST, ext)) {
+		list_del(&ctx->list);
 		free(ctx);
 		return NULL;
 	}
