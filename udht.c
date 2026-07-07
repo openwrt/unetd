@@ -149,12 +149,13 @@ udht_send_v4_node(const void *id, const void *data)
 		.local = {
 			.ep.in = {
 				.sin_family = AF_INET,
-				.sin_addr = *(const struct in_addr *)data,
-				.sin_port = *(const uint16_t *)(data + 4),
 			},
 			.timeout = 15 * 60,
 		}
 	};
+
+	memcpy(&msg.local.ep.in.sin_addr, data, sizeof(msg.local.ep.in.sin_addr));
+	memcpy(&msg.local.ep.in.sin_port, data + 4, sizeof(msg.local.ep.in.sin_port));
 
 	list_for_each_entry(n, &networks, list) {
 		if (memcmp(n->id, id, sizeof(n->id)) != 0)
@@ -186,7 +187,7 @@ udht_cb(void *closure, int event, const unsigned char *info_hash,
 	} else if (event == DHT_EVENT_VALUES) {
 		printf("Received %d values.\n", (int)(data_len / 6));
 		for (i = 0; i < data_len / 6; i++) {
-			fprintf(stderr, "Node: %s:%d\n", inet_ntop(AF_INET, data, addrbuf, sizeof(addrbuf)), ntohs(*(uint16_t *)(data + 4)));
+			fprintf(stderr, "Node: %s:%d\n", inet_ntop(AF_INET, data, addrbuf, sizeof(addrbuf)), get_unaligned_be16(data + 4));
 			udht_send_v4_node(info_hash, data);
 			data += 6;
 		}
