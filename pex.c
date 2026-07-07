@@ -995,7 +995,9 @@ void network_pex_close(struct network *net)
 
 	uloop_fd_delete(&pex->fd);
 	close(pex->fd.fd);
-	network_pex_init(net);
+	pex->fd = (struct uloop_fd){
+		.fd = -1,
+	};
 }
 
 void network_pex_free(struct network *net)
