@@ -418,8 +418,12 @@ bool pex_msg_update_response_continue(struct pex_msg_update_send_ctx *ctx)
 	}
 
 	if (!__pex_msg_init_ext(ctx->pubkey, ctx->auth_key,
-				PEX_MSG_UPDATE_RESPONSE_DATA, ctx->ext))
+				PEX_MSG_UPDATE_RESPONSE_DATA, ctx->ext)) {
+		free(ctx->data);
+		ctx->data = NULL;
+
 		return false;
+	}
 
 	res_ext = pex_msg_append(sizeof(*res_ext));
 	res_ext->req_id = ctx->req_id;
