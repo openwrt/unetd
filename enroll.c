@@ -463,7 +463,23 @@ enroll_recv_client_accept(const struct enroll_msg_hdr *hdr,
 		       struct enroll_msg_key_data *key_data,
 		       struct sockaddr_in6 *addr)
 {
+	uint8_t msg_hash[ENROLL_HASH_SIZE];
+	struct sha512_state s;
 	struct enroll_peer *peer;
+
+	if (!enroll_parse_hash(msg_hash)) {
+		D("Invalid client accept message");
+		return;
+	}
+
+	sha512_init(&s);
+	sha512_add(&s, state->net->config.auth_key,
+		   sizeof(state->net->config.auth_key));
+	sha512_add(&s, state->pubkey, sizeof(state->pubkey));
+	if (memcmp(sha512_final_get(&s), msg_hash, sizeof(msg_hash)) != 0) {
+		D("Invalid confirmation hash in client accept message");
+		return;
+	}
 
 	peer = enroll_get_peer(hdr, addr, key_data, NULL);
 	if (!peer)
