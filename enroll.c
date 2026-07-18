@@ -462,7 +462,7 @@ enroll_recv_client_accept(const struct enroll_msg_hdr *hdr,
 {
 	struct enroll_peer *peer;
 
-	peer = enroll_get_peer(hdr, addr, NULL, NULL);
+	peer = enroll_get_peer(hdr, addr, key_data, NULL);
 	if (!peer)
 		return;
 
@@ -522,7 +522,7 @@ enroll_recv_server_confirm(const struct enroll_msg_hdr *hdr,
 		return;
 	}
 
-	peer = enroll_get_peer(hdr, addr, NULL, NULL);
+	peer = enroll_get_peer(hdr, addr, key_data, NULL);
 	if (!peer)
 		return;
 
