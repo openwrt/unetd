@@ -140,47 +140,88 @@ static int network_load_file(struct network *net)
 	return network_load_data(net, b.head);
 }
 
-static int network_load_dynamic(struct network *net)
+static void *
+network_read_dynamic_file(struct network *net, size_t *data_len,
+			  uint64_t *version, const char **json)
 {
-	const char *json = NULL;
 	char *fname = NULL;
-	void *net_data;
+	void *data = NULL;
 	struct stat st;
-	FILE *f = NULL;
-	int ret = -1;
+	FILE *f;
 
 	if (asprintf(&fname, "%s/%s.bin", data_dir, network_name(net)) < 0)
-		return -1;
+		return NULL;
 
 	f = fopen(fname, "r");
 	free(fname);
 
 	if (!f) {
-		D_NET(net, "failed to open %s/%s.bin\n", data_dir, network_name(net));
-		return -1;
+		D_NET(net, "failed to open %s/%s.bin", data_dir, network_name(net));
+		return NULL;
 	}
 
 	if (fstat(fileno(f), &st) < 0)
-		goto out;
+		goto error;
 
-	if (st.st_size > UNETD_NET_DATA_SIZE_MAX)
-		goto out;
+	if (!st.st_size || st.st_size > UNETD_NET_DATA_SIZE_MAX)
+		goto error;
 
-	net_data = realloc(net->net_data, st.st_size + 1);
-	if (!net_data)
-		goto out;
+	data = malloc(st.st_size);
+	if (!data)
+		goto error;
 
-	net->net_data = net_data;
-	net->net_data_len = st.st_size;
-	memset(net->net_data + net->net_data_len, 0, 1);
-	if (fread(net->net_data, 1, net->net_data_len, f) != net->net_data_len ||
-	    unet_auth_data_validate(net->config.auth_key, net->net_data,
-				    net->net_data_len, &net->net_data_version, &json)) {
-		net->net_data_len = 0;
-		goto out;
-	}
+	if (fread(data, 1, st.st_size, f) != st.st_size)
+		goto error;
 
 	fclose(f);
+
+	if (unet_auth_data_validate(net->config.auth_key, data, st.st_size,
+				    version, json)) {
+		free(data);
+		return NULL;
+	}
+
+	*data_len = st.st_size;
+	return data;
+
+error:
+	fclose(f);
+	free(data);
+	return NULL;
+}
+
+static int network_load_dynamic(struct network *net)
+{
+	const char *json = NULL, *mem_json = NULL;
+	uint64_t version = 0;
+	size_t data_len = 0;
+	void *data;
+
+	data = network_read_dynamic_file(net, &data_len, &version, &json);
+
+	/*
+	 * The in-memory copy was validated when it was received, so prefer it
+	 * over a missing, invalid or older file and restore the on-disk copy
+	 * from it.
+	 */
+	if (net->net_data_len &&
+	    (!data || version < net->net_data_version) &&
+	    !unet_auth_data_validate(net->config.auth_key, net->net_data,
+				     net->net_data_len, &net->net_data_version,
+				     &mem_json)) {
+		free(data);
+		json = mem_json;
+		network_save_dynamic(net);
+	} else if (data) {
+		free(net->net_data);
+		net->net_data = data;
+		net->net_data_len = data_len;
+		net->net_data_version = version;
+	} else {
+		net->net_data_len = 0;
+		return -1;
+	}
+
 	blob_buf_init(&b, 0);
 	if (!blobmsg_add_json_from_string(&b, json)) {
 		net->net_data_len = 0;
@@ -188,10 +229,6 @@ static int network_load_dynamic(struct network *net)
 	}
 
 	return network_load_data(net, b.head);
-
-out:
-	fclose(f);
-	return ret;
 }
 
 int network_save_dynamic(struct network *net)
