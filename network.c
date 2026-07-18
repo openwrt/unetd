@@ -163,6 +163,9 @@ static int network_load_dynamic(struct network *net)
 	if (fstat(fileno(f), &st) < 0)
 		goto out;
 
+	if (st.st_size > UNETD_NET_DATA_SIZE_MAX)
+		goto out;
+
 	net_data = realloc(net->net_data, st.st_size + 1);
 	if (!net_data)
 		goto out;
