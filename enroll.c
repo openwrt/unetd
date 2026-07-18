@@ -300,7 +300,10 @@ enroll_get_peer(const struct enroll_msg_hdr *hdr,
 
 	peer = avl_find_element(&state->peers, hdr->pubkey, peer, node);
 	if (peer) {
-		if (key_data && nonce <= peer->nonce) {
+		if (!key_data)
+			return peer;
+
+		if (nonce <= peer->nonce) {
 			D("replay detected");
 			return NULL;
 		}
