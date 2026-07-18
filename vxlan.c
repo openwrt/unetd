@@ -126,12 +126,17 @@ vxlan_peer_update(struct network *net, struct network_service *s, struct network
 static void
 vxlan_tunnel_init(struct vxlan_tunnel *vt)
 {
-	struct network_peer *local = &vt->net->net_config.local_host->peer;
+	struct network_host *local_host = vt->net->net_config.local_host;
+	struct network_peer *local;
 	struct nlattr *linkinfo, *data;
 	struct nl_msg *msg;
 	struct in6_addr group_addr;
 	int mtu;
 
+	if (!local_host)
+		return;
+
+	local = &local_host->peer;
 	if (rtnl_init())
 		return;
 
@@ -363,7 +368,8 @@ vxlan_init(struct network *net, struct network_service *s,
 	}
 
 	if (vt) {
-		if (!strcmp(vt->ifname, name) && vxlan_config_equal(s, s_old)) {
+		if (vt->active && !strcmp(vt->ifname, name) &&
+		    vxlan_config_equal(s, s_old)) {
 			s->vxlan = vt;
 			vt->s = s;
 			return;
