@@ -209,7 +209,7 @@ retry:
 				case EMSGSIZE:
 				case ENOBUFS:
 				case EAGAIN:
-					continue;
+					break;
 				default:
 					perror("sendmsg");
 					close(pex_unix_tx_fd);
