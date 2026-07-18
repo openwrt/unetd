@@ -66,7 +66,7 @@ static const struct blobmsg_policy enroll_policy[__ENROLL_ATTR_MAX] = {
 	[ENROLL_ATTR_INFO] = { "info", BLOBMSG_TYPE_TABLE },
 };
 
-struct blob_attr *tb[__ENROLL_ATTR_MAX];
+static struct blob_attr *tb[__ENROLL_ATTR_MAX];
 
 static void
 blobmsg_add_key(struct blob_buf *buf, const char *name, const uint8_t *key)
