@@ -1,0 +1,34 @@
+name: Test build.sh
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native_testing:
+    name: Test build.sh
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libjson-c-dev libelf-dev
+
+      - name: Install unet via build.sh
+        run: |
+          bash build.sh
+
+      - name: Test unet-tool help command
+        run: |
+          ./unet-tool 2>&1 | grep "Usage: ./unet-tool \[command|options\] \[<file>\]"
