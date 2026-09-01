@@ -637,6 +637,7 @@ static void unetd_ubus_procd_update(void)
 			blobmsg_add_string(&b, "proto", "udp");
 			blobmsg_add_string(&b, "src", "*");
 			blobmsg_add_u32(&b, "dest_port", local->port);
+			blobmsg_add_string(&b, "target", "ACCEPT");
 			blobmsg_close_table(&b, rule);
 		}
 
@@ -646,6 +647,7 @@ static void unetd_ubus_procd_update(void)
 			blobmsg_add_string(&b, "proto", "udp");
 			blobmsg_add_string(&b, "src", "*");
 			blobmsg_add_u32(&b, "dest_port", local->pex_port);
+			blobmsg_add_string(&b, "target", "ACCEPT");
 			blobmsg_close_table(&b, rule);
 		}
 	}
