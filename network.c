@@ -61,6 +61,7 @@ const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 	[NETWORK_ATTR_AUTH_CONNECT] = { "auth_connect", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_ATTR_PEER_DATA] = { "peer_data", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_ATTR_DHT] = { "dht", BLOBMSG_TYPE_BOOL },
+	[NETWORK_ATTR_FIREWALL] = { "firewall", BLOBMSG_TYPE_BOOL },
 };
 
 AVL_TREE(networks, avl_strcmp, false, NULL);
@@ -691,6 +692,11 @@ network_set_config(struct network *net, struct blob_attr *config)
 		net->config.keepalive = blobmsg_get_u32(cur);
 	else
 		net->config.keepalive = -1;
+
+	if ((cur = tb[NETWORK_ATTR_FIREWALL]) != NULL)
+		net->config.firewall = blobmsg_get_bool(cur);
+	else
+		net->config.firewall = true;
 
 	switch (net->config.type) {
 	case NETWORK_TYPE_FILE:
