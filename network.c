@@ -60,6 +60,7 @@ const struct blobmsg_policy network_policy[__NETWORK_ATTR_MAX] = {
 	[NETWORK_ATTR_LOCAL_NET] = { "local_network", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_ATTR_AUTH_CONNECT] = { "auth_connect", BLOBMSG_TYPE_ARRAY },
 	[NETWORK_ATTR_PEER_DATA] = { "peer_data", BLOBMSG_TYPE_ARRAY },
+	[NETWORK_ATTR_DHT] = { "dht", BLOBMSG_TYPE_BOOL },
 };
 
 AVL_TREE(networks, avl_strcmp, false, NULL);
