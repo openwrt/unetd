@@ -44,6 +44,8 @@ struct stun_tlv_policy {
 
 struct stun_request {
 	uint8_t transaction[12];
+	uint8_t addr[16];
+	uint8_t addr_len;
 	uint16_t port;
 	bool pending;
 };
