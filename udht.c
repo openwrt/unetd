@@ -479,7 +479,7 @@ udht_status_check(struct uloop_timeout *t)
 		return;
 
 	if (good < 4 || good + dubious < 8) {
-		if (state.tick > 45 && !state.bootstrap_added)
+		if (state.tick > 45 && !(state.tick % 60))
 			udht_add_bootstrap_peer();
 
 		return;
