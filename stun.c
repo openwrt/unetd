@@ -128,9 +128,56 @@ const void *stun_msg_request_prepare(struct stun_request *req, size_t *len,
 	memcpy(req->transaction, hdr->transaction, sizeof(req->transaction));
 	req->pending = true;
 	req->port = 0;
+	req->addr_len = 0;
 	*len = htons(hdr->msg_len) + sizeof(*hdr);
 
 	return hdr;
+}
+
+static bool
+stun_msg_read_mapped(struct stun_request *req, const struct stun_msg_tlv *tlv,
+		     bool xor)
+{
+	const uint8_t *val = (const uint8_t *)(tlv + 1);
+	unsigned int len = ntohs(tlv->len);
+	uint8_t mask[16] = {};
+	unsigned int addr_len;
+	unsigned int i;
+
+	if (len < 4)
+		return false;
+
+	switch (val[1]) {
+	case 1:
+		addr_len = 4;
+		break;
+	case 2:
+		addr_len = 16;
+		break;
+	default:
+		return false;
+	}
+
+	if (len < 4 + addr_len)
+		return false;
+
+	if (xor) {
+		mask[0] = (STUN_MAGIC >> 24) & 0xff;
+		mask[1] = (STUN_MAGIC >> 16) & 0xff;
+		mask[2] = (STUN_MAGIC >> 8) & 0xff;
+		mask[3] = STUN_MAGIC & 0xff;
+		memcpy(&mask[4], req->transaction, sizeof(req->transaction));
+	}
+
+	req->port = ntohs(*(const uint16_t *)&val[2]);
+	if (xor)
+		req->port ^= STUN_MAGIC >> 16;
+
+	for (i = 0; i < addr_len; i++)
+		req->addr[i] = val[4 + i] ^ mask[i];
+	req->addr_len = addr_len;
+
+	return true;
 }
 
 bool stun_msg_request_complete(struct stun_request *req, const void *data,
@@ -147,8 +194,6 @@ bool stun_msg_request_complete(struct stun_request *req, const void *data,
 		[PARSE_ATTR_XOR_MAPPED] = { STUN_TLV_XOR_MAPPED_ADDRESS, 8 }
 	};
 	const struct stun_msg_hdr *hdr = data;
-	const void *tlv_data;
-	uint16_t port;
 
 	if (!req->pending)
 		return false;
@@ -164,18 +209,11 @@ bool stun_msg_request_complete(struct stun_request *req, const void *data,
 
 	stun_msg_parse(policy, tb, __PARSE_ATTR_MAX, data, len);
 
-	if (tb[PARSE_ATTR_XOR_MAPPED]) {
-		tlv_data = tb[PARSE_ATTR_XOR_MAPPED] + 1;
-		tlv_data += 2;
-		port = ntohs(*(const uint16_t *)tlv_data);
-		port ^= STUN_MAGIC >> 16;
-	} else if (tb[PARSE_ATTR_MAPPED]) {
-		tlv_data = tb[PARSE_ATTR_MAPPED] + 1;
-		tlv_data += 2;
-		port = ntohs(*(const uint16_t *)tlv_data);
-	} else
-		return false;
+	if (tb[PARSE_ATTR_XOR_MAPPED])
+		return stun_msg_read_mapped(req, tb[PARSE_ATTR_XOR_MAPPED], true);
 
-	req->port = port;
-	return true;
+	if (tb[PARSE_ATTR_MAPPED])
+		return stun_msg_read_mapped(req, tb[PARSE_ATTR_MAPPED], false);
+
+	return false;
 }

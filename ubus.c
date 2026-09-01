@@ -627,7 +627,8 @@ static void unetd_ubus_procd_update(void)
 	avl_for_each_element(&networks, net, node) {
 		struct network_peer *local;
 
-		if (!net->net_config.local_host || !net->config.interface)
+		if (!net->net_config.local_host || !net->config.interface ||
+		    !net->config.firewall)
 			continue;
 
 		local = &net->net_config.local_host->peer;
@@ -637,6 +638,7 @@ static void unetd_ubus_procd_update(void)
 			blobmsg_add_string(&b, "proto", "udp");
 			blobmsg_add_string(&b, "src", "*");
 			blobmsg_add_u32(&b, "dest_port", local->port);
+			blobmsg_add_string(&b, "target", "ACCEPT");
 			blobmsg_close_table(&b, rule);
 		}
 
@@ -646,6 +648,7 @@ static void unetd_ubus_procd_update(void)
 			blobmsg_add_string(&b, "proto", "udp");
 			blobmsg_add_string(&b, "src", "*");
 			blobmsg_add_u32(&b, "dest_port", local->pex_port);
+			blobmsg_add_string(&b, "target", "ACCEPT");
 			blobmsg_close_table(&b, rule);
 		}
 	}

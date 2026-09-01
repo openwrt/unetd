@@ -40,6 +40,7 @@ struct network {
 		struct blob_attr *local_network;
 		struct blob_attr *auth_connect;
 		struct blob_attr *peer_data;
+		bool firewall;
 	} config;
 
 	struct {
@@ -92,6 +93,8 @@ enum {
 	NETWORK_ATTR_LOCAL_NET,
 	NETWORK_ATTR_AUTH_CONNECT,
 	NETWORK_ATTR_PEER_DATA,
+	NETWORK_ATTR_DHT,
+	NETWORK_ATTR_FIREWALL,
 	__NETWORK_ATTR_MAX,
 };
 
