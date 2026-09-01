@@ -374,6 +374,8 @@ static void udht_add_bootstrap_peer(void)
 	static const char * const bootstrap_hosts[] = {
 		"router.bittorrent.com",
 		"router.utorrent.com",
+		"dht.transmissionbt.com",
+		"dht.libtorrent.org",
 	};
 	int i;
 
